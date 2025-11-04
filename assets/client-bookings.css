@@ -1,0 +1,198 @@
+#client-bookings {
+        max-width:1200px;
+        margin: 0 auto;
+        padding: 20px 0px;
+        width: 100%;
+    }
+    
+    .booking-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: white;
+    }
+    
+    .booking-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .booking-header h3{
+        font-weight: bold;
+    }
+
+    .booking-details{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .booking-status {
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .status-pending_dates { background: #ffeaa7; color: #2d3436; }
+    .status-dates_proposed { background: #a29bfe; color: white; }
+    .status-dates_rejected { background: #ff6b6b; color: white; }
+    .status-confirmed { background: #00b894; color: white; }
+    
+    .status-message {
+        padding: 15px;
+        border-radius: 4px;
+        border-left: 4px solid #ffeaa7;
+    }
+    
+    .status-message.rejected {
+        border-left: 4px solid #ff6b6b;
+    }
+    
+    .status-message.confirmed {
+        border-left: 4px solid #00b894;
+    }
+
+    .status-message p{
+        margin: 0;
+    }
+
+    .booking-details .booking-tickets{
+        display: flex;
+        gap: 8px;;
+    }
+
+    .booking-details .booking-tickets .ticket-list{
+        list-style: none;
+        display: flex;
+        gap: 8px;
+        margin: 0;
+    }
+    
+    .proposed-dates {
+        margin-top: 15px;
+        padding: 15px;
+        background: white;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+    
+    .date-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid #ddd;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    
+    .btn-accept-date, .btn-reject-dates {
+        background: #00b894;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .btn-accept-date:hover {
+        background: #00a085;
+    }
+    
+    .btn-accept-date:disabled, .btn-reject-dates:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    
+    .reject-dates-section {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    .btn-show-reject-form {
+        background: #e17055;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+    
+    .btn-show-reject-form:hover {
+        background: #d63031;
+    }
+    
+    .reject-form {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        margin-top: 15px;
+    }
+    
+    .reject-form h6 {
+        margin-bottom: 10px;
+        color: #2d3436;
+    }
+    
+    .date-range-inputs {
+        margin-bottom: 15px;
+    }
+    
+    .date-inputs-row {
+        display: flex;
+        gap: 10px;
+        margin: 10px 0;
+    }
+    
+    .date-inputs-row input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .rejection-reason {
+        width: 100%;
+        min-height: 80px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
+    
+    .reject-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+    
+    .btn-cancel-reject {
+        background: #6c757d;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .btn-reject-dates {
+        background: #e17055;
+    }
+    
+    .suggested-range {
+        background: #e8f4f8;
+        padding: 10px;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    
+    .btn-loading {
+        display: none;
+    }
