@@ -52,6 +52,7 @@ class Booking_invoice_generator extends FPDF
 		error_log("Intentando cargar orden con ID: " . $booking_obj->order_id);
 
 		// 1. OBTENER DATOS DE WOOCOMMERCE
+		
 		$order = wc_get_order($booking_obj->order_id);
 
 		if (!$order) {
@@ -69,17 +70,17 @@ class Booking_invoice_generator extends FPDF
 		// Inicializar variables para cálculos
 		$total_precio_neto = 0;
 		$total_comision_bruta = 0;
-		$total_honorarios_admin = 0;
 		$datos_factura = [];
 
 		// 2. Procesar items de la orden
-		$iva_rate = 0.21; // 21% de IVA (Ajustar)
-		$commission_rate = 0.15; // 15% de comisión (Ajustar)
+		$iva_rate = 0.21; // 21% de IVA 
+		$commission_rate = 0.10; // 10% de comisión 
 
 		// El campo $booking_obj->booking_details contiene los detalles serializados/JSON.
 		$booking_details_raw = $booking_obj->booking_details;
 		$booking_details = maybe_unserialize($booking_details_raw);
 		$details = json_decode($booking_details, true);
+		
 		if (!is_array($details)) {
 			$details = [];
 		}
@@ -88,7 +89,7 @@ class Booking_invoice_generator extends FPDF
 		foreach ($order->get_items('line_item') as $item_id => $item) {
 
 			$product = $item->get_product();
-			$sku = $product ? $product->get_sku() : 'N/A';
+			$sku = $product ? $product->get_sku() : 'N/A';	
 			$name = $item->get_name(); // Nombre de la experiencia
 
 			$price_neto_item = $item->get_subtotal(); // Precio neto de la línea de producto
@@ -140,14 +141,16 @@ class Booking_invoice_generator extends FPDF
 
 			$total_precio_neto += $price_neto_item;
 			$total_comision_bruta += $comision_item;
-		} // <--- CIERRE DEL FOREACH PRINCIPAL
+		}
 
 		// CÁLCULOS FINALES DE COMISIÓN (Base para la factura del colaborador)
 		$iva_comision = $total_comision_bruta * $iva_rate;
-		$ganancia_neta_final = $total_comision_bruta - $iva_comision - $total_honorarios_admin;
+		$ganancia_bruta = $total_precio_neto - $total_comision_bruta;
+		$ganancias_totales = $ganancia_bruta - $iva_comision;
+		$honorarios_adminitracion = $total_comision_bruta + $iva_comision; 
 
 
-		// --- INICIO DE LA GENERACIÓN DEL PDF (Estructura FPDF) ---
+		// --- INICIO DE LA GENERACIÓN DEL PDF ---
 
 		$this->AddPage();
 		$this->SetMargins(10, 20, 10);
@@ -225,13 +228,13 @@ class Booking_invoice_generator extends FPDF
 		$this->Ln(25);
 
 		$totales_reales = [
-			"Subtotal" => number_format($total_precio_neto, 2),
-			"Impuestor" => number_format(0, 2), // Corregido: Variable $prueba eliminada
-			"Total en bruto" => number_format(0, 2),
-			"Ganancia bruta" => number_format($total_comision_bruta, 2),
-			"I.V.A (" . ($iva_rate * 100) . "%)" => number_format($iva_comision, 2),
-			"Ganancias Totales" => number_format($ganancia_neta_final, 2),
-			"Honorarios de administración" => number_format($total_honorarios_admin, 2),
+			"Subtotal" => number_format($total_precio_neto, 2, ',', '.'),
+			"Impuesto" => number_format(0, 2, ',', '.'),
+			"Total en bruto" => number_format($total_precio_neto, 2, ',', '.'),
+			"Ganancia bruta" => number_format($ganancia_bruta, 2, ',', '.'),
+			"I.V.A (" . ($iva_rate * 100) . "%)" => number_format($iva_comision, 2, ',', '.'),
+			"Ganancias Totales" => number_format($ganancias_totales, 2, ',', '.'),
+			"Honorarios de administración" => number_format($honorarios_adminitracion, 2, ',', '.'),
 		];
 
 		foreach ($totales_reales as $label => $valor) {
