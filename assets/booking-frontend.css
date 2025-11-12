@@ -1,0 +1,89 @@
+.reject-dates-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #e17055;
+}
+
+.reject-form {
+    margin-top: 15px;
+}
+
+.date-inputs-row {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.date-inputs-row input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.rejection-reason {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.reject-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn-show-reject-form,
+.btn-reject-dates,
+.btn-cancel-reject {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    position: relative;
+}
+
+.btn-show-reject-form {
+    background: #e17055;
+    color: white;
+}
+
+.btn-reject-dates {
+    background: #e17055;
+    color: white;
+}
+
+.btn-cancel-reject {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-show-reject-form:hover,
+.btn-reject-dates:hover {
+    background: #d63031;
+}
+
+.btn-cancel-reject:hover {
+    background: #5a6268;
+}
+
+.suggested-range {
+    background: #e8f4f8;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    border-left: 4px solid #0984e3;
+}
+
+.status-message.rejected {
+    background: #ffe6e6;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #ff6b6b;
+}

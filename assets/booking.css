@@ -1,0 +1,533 @@
+/* Variables CSS para la paleta de colores */
+:root {
+    --primary-blue: #084D86;
+    --primary-green: #72b84a;
+    --primary-yellow: #fed500;
+    --primary-orange: #F07E13;
+    --white: #ffffff;
+    --light-gray: #f8f9fa;
+    --border-gray: #e9ecef;
+    --text-dark: #333333;
+    --text-muted: #6c757d;
+}
+
+/* Modal principal */
+.booking-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(8, 77, 134, 0.8); /* Usando primary-blue con transparencia */
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.booking-modal.show {
+    opacity: 1;
+}
+
+.booking-modal-content {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 0;
+    max-width: 480px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.booking-modal.show .booking-modal-content {
+    transform: translateY(0);
+}
+
+/* Header del modal */
+.booking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, var(--primary-blue), #0a5a9a);
+    color: var(--white);
+    border-radius: 12px 12px 0 0;
+}
+
+.booking-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: white;
+}
+
+.close-modal {
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--white);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    line-height: 1;
+    padding: 5px;
+}
+
+.close-modal:hover {
+    opacity: 1;
+}
+
+/* Cuerpo del modal */
+.booking-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(90vh - 80px);
+}
+
+/* Política de cancelación */
+.booking-policy {
+    background: var(--light-gray);
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    border-left: 4px solid var(--primary-orange);
+}
+
+.booking-policy strong {
+    color: var(--primary-blue);
+}
+
+/* Selección de horarios */
+.schedule-selection {
+    background: var(--light-gray);
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    border: 2px solid var(--border-gray);
+    transition: border-color 0.3s ease;
+}
+
+.schedule-times label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    cursor: pointer;
+    padding: 12px 12px 12px 0;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.schedule-times label:hover {
+    background-color: rgba(114, 184, 74, 0.1);    
+}
+
+.schedule-times input[type="radio"] {
+    margin-right: 12px;
+    transform: scale(1.2);
+    accent-color: var(--primary-green);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-gray);
+    border-radius: 50%;
+    background-color: var(--white);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* Estado hover */
+.schedule-times input[type="radio"]:hover {
+    border-color: var(--primary-green);
+}
+
+/* Estado checked (seleccionado) */
+.schedule-times input[type="radio"]:checked {
+    border-color: var(--white);
+    background-color: var(--primary-green);
+    box-shadow: 0 0 0 2px var(--primary-green);
+}
+
+/* Punto interno cuando está seleccionado */
+.schedule-times input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--white);
+    transform: translate(-50%, -50%);
+}
+
+/* Estado focus para accesibilidad */
+.schedule-times input[type="radio"]:focus {
+    outline: 2px solid var(--primary-yellow);
+    outline-offset: 2px;
+}
+
+.schedule-times input[type="radio"]:checked + strong {
+    color: var(--primary-blue);
+}
+
+.validity-date {
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 12px;
+    font-style: italic;
+}
+
+/* Título de la experiencia */
+.experience-title {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--primary-yellow);
+}
+
+.experience-title h4 {
+    margin: 0;
+    color: var(--primary-blue);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Filas de tickets */
+.ticket-selection {
+    margin-bottom: 24px;
+}
+
+.ticket-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border-gray);
+    transition: background-color 0.2s ease;
+}
+
+.ticket-row:hover {
+    background-color: rgba(254, 213, 0, 0.05);
+}
+
+.ticket-row:last-child {
+    border-bottom: none;
+}
+
+.ticket-info {
+    flex: 1;
+}
+
+.ticket-type {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-dark);
+    font-size: 1rem;
+}
+
+.ticket-price {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ticket-price .price {
+    font-weight: bold;
+    font-size: 1.25rem;
+    color: var(--primary-orange);
+}
+
+.ticket-price small {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* Selector de cantidad */
+.quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 120px;
+    justify-content: end;
+}
+
+.quantity-display {
+    min-width: 30px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: var(--primary-blue);
+}
+
+.quantity-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.quantity-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--primary-green);
+    background: var(--white);
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    color: var(--primary-green);
+    transition: all 0.2s ease;
+}
+
+.quantity-btn:hover {
+    background: var(--primary-green);
+    color: var(--white);
+    transform: scale(1.05);
+}
+
+.quantity-btn:active {
+    transform: scale(0.95);
+}
+
+/* Botón de confirmación */
+.booking-confirm-btn {
+    width: 100%;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, var(--primary-orange), #e66b00);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+}
+
+.booking-confirm-btn:hover {
+    background: linear-gradient(135deg, #e66b00, var(--primary-orange));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(240, 126, 19, 0.3);
+}
+
+.booking-confirm-btn:active {
+    transform: translateY(0);
+}
+
+.booking-confirm-btn:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .booking-modal {
+        padding: 10px;
+        align-items: flex-start;
+        padding-top: 20px;
+    }
+    
+    .booking-modal-content {
+        max-width: 100%;
+        max-height: 95vh;
+    }
+    
+    .booking-header {
+        padding: 16px 20px;
+    }
+    
+    .booking-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .booking-body {
+        padding: 20px;
+    }
+    
+    .ticket-row {
+        align-items: flex-start;
+        gap: 16px;
+        padding: 16px 0;
+    }
+    
+    .quantity-selector {
+        align-self: flex-end;
+        min-width: auto;
+    }
+    
+    .schedule-times label {
+        padding: 10px 10px 10px 0;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .booking-header {
+        padding: 12px 16px;
+    }
+    
+    .booking-body {
+        padding: 16px;
+    }
+    
+    .schedule-selection,
+    .booking-policy {
+        padding: 16px;
+    }
+    
+    .quantity-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .booking-confirm-btn {
+        font-size: 1rem;
+        padding: 14px 20px;
+    }
+}
+
+/* Animaciones adicionales */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.booking-modal-content {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Estados de focus para accesibilidad */
+.schedule-times input[type="radio"]:focus {
+    outline: 2px solid var(--primary-green);
+    outline-offset: 2px;
+}
+
+.quantity-btn:focus {
+    outline: 2px solid var(--primary-blue);
+    outline-offset: 2px;
+}
+
+.booking-confirm-btn:focus {
+    outline: 2px solid var(--primary-yellow);
+    outline-offset: 2px;
+}
+
+.quantity-updated {
+    animation: pulse 0.2s ease;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+
+/* Título de selección de horario */
+.schedule-title {
+    margin: 0 0 16px 0;
+    font-size: 1rem;
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+/* Nota explicativa sobre la fecha */
+.schedule-note {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: rgba(114, 184, 74, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-green);
+}
+
+.schedule-note small {
+    color: var(--primary-blue);
+    font-style: italic;
+}
+
+/* Resumen de compra */
+.booking-summary {
+    background: var(--light-gray);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-gray);
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.summary-row:last-child {
+    margin-bottom: 0;
+}
+
+.total-row {
+    padding-top: 12px;
+    border-top: 2px solid var(--primary-yellow);
+    margin-top: 12px;
+}
+
+.total-row span {
+    font-size: 1.1rem;
+    color: var(--primary-blue);
+}
+
+/* Botón de confirmación con precio */
+.booking-confirm-btn {
+    width: 100%;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, var(--primary-orange), #e66b00);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-price {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+/* Responsive para el r
