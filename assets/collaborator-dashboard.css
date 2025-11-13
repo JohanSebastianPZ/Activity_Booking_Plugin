@@ -514,7 +514,8 @@
         border-radius: 5px;
         padding: 10px 15px;
         margin-top: 15px;
-        width: 100%; /* Opcional: si quieres que ocupe todo el ancho */
+        margin-left: auto;
+        margin-right: auto;
         cursor: pointer;
         font-size: 1em;
         font-weight: 600;
