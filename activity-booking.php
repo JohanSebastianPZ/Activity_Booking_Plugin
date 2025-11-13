@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Plugin Name: Activity Booking
  * Description: Plugin para reserva de actividades con horarios específicos

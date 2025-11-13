@@ -504,6 +504,40 @@
         margin: 0 0 10px 0;
         color: var(--gray-700);
     }
+
+    /* Estilos para la botonera general dentro de la tarjeta */
+    .booking-content .btn-download-invoice {
+        /* Estilos de Botón */
+        background-color: #007bff; /* Color de Regalexia (ejemplo de acento) */
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 15px;
+        margin-top: 15px;
+        margin-left: auto;
+        margin-right: auto;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: 600;
+        
+        /* Disposición de Icono y Texto */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px; /* Espacio entre el ícono y el texto */
+        
+        /* Transición (para un efecto suave al pasar el ratón) */
+        transition: background-color 0.3s ease;
+    }
+
+    .booking-content .btn-download-invoice:hover {
+        background-color: #0056b3; /* Un poco más oscuro al pasar el ratón */
+    }
+
+    /* Estilos para el ícono (si usas la clase 'icon-download') */
+    .booking-content .btn-download-invoice i {
+        font-size: 1.1em;
+}
     
     /* Responsive */
     @media (max-width: 768px) {
