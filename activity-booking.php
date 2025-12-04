@@ -491,23 +491,6 @@ class ActivityBooking
 		return json_encode($details);
 	}
 
-	// Esta funcion genera un array de horas, para que el usuario seleccione la hora deseada
-	public function generate_time_options()
-	{
-		$options = array();
-		for ($i = 0; $i < 24; $i++) {
-			// Horas completas (ej: 09:00)
-			$time_value = date('H:i', strtotime("$i:00"));
-			$options[$time_value] = $time_value;
-
-			// Medias horas (ej: 09:30)
-			$time_value = date('H:i', strtotime("$i:30"));
-			if ($i < 23) { // Evita 24:30
-				$options[$time_value] = $time_value;
-			}
-		}
-		return $options;
-	}
 	public function add_activity_fields()
 	{
 		woocommerce_wp_checkbox(array(
@@ -518,105 +501,106 @@ class ActivityBooking
 
 		echo '<div class="options_group">';
 
-			$collaborators = get_users(array('role' => 'activity_collaborator'));
-			$collaborator_options = array('' => 'Seleccionar colaborador');
+		$collaborators = get_users(array('role' => 'activity_collaborator'));
+		$collaborator_options = array('' => 'Seleccionar colaborador');
 
-			foreach ($collaborators as $collaborator) {
-				$collaborator_options[$collaborator->ID] = $collaborator->display_name . ' (' . $collaborator->user_email . ')';
-			}
+		foreach ($collaborators as $collaborator) {
+			$collaborator_options[$collaborator->ID] = $collaborator->display_name . ' (' . $collaborator->user_email . ')';
+		}
 
-			woocommerce_wp_select(array(
-				'id' => '_activity_collaborator',
-				'label' => 'Colaborador asignado',
-				'options' => $collaborator_options,
-				'description' => 'Selecciona el colaborador responsable de esta actividad'
-			));
+		woocommerce_wp_select(array(
+			'id' => '_activity_collaborator',
+			'label' => 'Colaborador asignado',
+			'options' => $collaborator_options,
+			'description' => 'Selecciona el colaborador responsable de esta actividad'
+		));
 
-			global $post; // objeto global $post para obtener los metadatos
-			$post_id = $post->ID;
+		global $post; // objeto global $post para obtener los metadatos
+		$post_id = $post->ID;
 
-			// Obtener los datos guardados
-			$saved_schedules = get_post_meta($post_id, '_activity_schedules_data', true);
+		// Obtener los datos guardados
+		$saved_schedules = get_post_meta($post_id, '_activity_schedules_data', true);
 
-			// Inicializar con un bloque vacío si no hay datos guardados
-			if (empty($saved_schedules) || !is_array($saved_schedules)) {
-				$saved_schedules = [
-					['day' => '', 'time' => '']
-				];
-			}
-
-			// Dias de la semana
-			$options = [
-				'days' => ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+		// Inicializar con un bloque vacío si no hay datos guardados
+		if (empty($saved_schedules) || !is_array($saved_schedules)) {
+			$saved_schedules = [
+				['day' => '', 'start_time' => '', 'end_time' => '']
 			];
+		}
 
-			$options_days = $options['days'];
-			$time_options = $this->generate_time_options();
+		// Dias de la semana
+		$options = [
+			'days' => ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+		];
 
-			$counter = 0; // Inicialización del contador para IDs/Nombres
+		$options_days = $options['days'];
 
-			foreach ($saved_schedules as $schedule) {
-				$current_day = $schedule['day'];
-				$current_start_time = isset($schedule['start_time']) ? $schedule['start_time'] : ''; // Asegurarse de tener la llave
-				$current_end_time = isset($schedule['end_time']) ? $schedule['end_time'] : '';
+		$counter = 0; // Inicialización del contador para IDs/Nombres
 
-				$extra_class = '';
+		foreach ($saved_schedules as $schedule) {
+			$current_day = $schedule['day'];
+			$current_start_time = isset($schedule['start_time']) ? $schedule['start_time'] : ''; // Asegurarse de tener la llave
+			$current_end_time = isset($schedule['end_time']) ? $schedule['end_time'] : '';
 
-				echo '<div class="date_product' . $extra_class . '">';
-					echo '<p>Fecha</p>';
-					echo '<div class="container">';
-						echo '<div class="date">';
+			$extra_class = '';
 
-							// SELECT DÍA
-							woocommerce_wp_select(array(
-								'id' => "_activity_schedules_days_{$counter}",
-								'name' => '_activity_schedules_days[]', // Array para guardar múltiples valores
-								'label' => 'Día:',
-								'options' => array_combine($options_days, array_map('ucfirst', $options_days)),
-								'value' => $current_day, // Carga el valor guardado
-								'description' => '',
-								'desc_tip' => true
-							));
+			echo '<div class="date_product' . $extra_class . '">';
+			echo '<p>Fecha</p>';
+			echo '<div class="container">';
+			echo '<div class="date">';
 
-							// SELECT HORARIO INICIO 
-							woocommerce_wp_select(array(
-								'id' => "_activity_schedules_start_time_{$counter}",
-								'name' => '_activity_schedules_start_time[]', // Array para guardar múltiples valores
-								'label' => __('Hora inicio', 'text-domain'),
-								'options' => $time_options,
-								'value' => $current_start_time, // Carga el valor guardado
-								'desc_tip' => true,
-							));
-
-							// SELECT HORARIO FIN
-							woocommerce_wp_select(array(
-								'id' => "_activity_schedules_end_time_{$counter}",
-								'name' => '_activity_schedules_end_time[]', // Array para guardar múltiples valores
-								'label' => __('Hora fin', 'text-domain'),
-								'options' => $time_options,
-								'value' => $current_end_time, // Carga el valor guardado
-								'desc_tip' => true,
-							));
-
-							// Botón Eliminar
-							echo "<button type='button' class='remove_schedule_button'>Eliminar</button>";
-
-						echo "</div>";
-					echo "</div>";
-				echo "</div>";
-
-				$counter++; // Incremento
-			}
-
-			// Botón para añadir horario
-			echo "<button type='button' class='add_schedule_button'>Agregar horario</button>"; 
-
-			woocommerce_wp_textarea_input(array(
-				'id' => '_activity_ticket_types',
-				'label' => 'Tipos de entrada',
-				'description' => 'Formato JSON: [{"id":"adult","name":"Adulto","price":"20"},{"id":"child","name":"Infantil","price":"18"}]',
+			// SELECT DÍA
+			woocommerce_wp_select(array(
+				'id' => "_activity_schedules_days_{$counter}",
+				'name' => '_activity_schedules_days[]', // Array para guardar múltiples valores
+				'label' => 'Día:',
+				'options' => array_combine($options_days, array_map('ucfirst', $options_days)),
+				'value' => $current_day, // Carga el valor guardado
+				'description' => '',
 				'desc_tip' => true
 			));
+
+			// SELECT HORARIO INICIO 
+			woocommerce_wp_text_input(array(
+				'id' => "_activity_schedules_start_time_{$counter}",
+				'name' => '_activity_schedules_start_time[]',
+				'label' => __('Hora inicio', 'text-domain'),
+				'value' => $current_start_time,
+				'type' => 'time',
+				'class' => 'short wc_input_time',
+				'desc_tip' => true,
+			));
+
+			// SELECT HORARIO FIN
+			woocommerce_wp_text_input(array(
+				'id' => "_activity_schedules_end_time_{$counter}",
+				'name' => '_activity_schedules_end_time[]', // ¡CRUCIAL!
+				'label' => __('Hora fin', 'text-domain'),
+				'value' => $current_end_time, // Carga el valor guardado
+				'type' => 'time',             // <-- Tipo de input
+				'class' => 'short wc_input_time',
+				'desc_tip' => true,
+			));
+
+			// Botón Eliminar
+			echo "<button type='button' class='remove_schedule_button'>Eliminar</button>";
+
+			echo "</div>";
+			echo "</div>";
+			echo "</div>";
+
+			$counter++; // Incremento
+		}
+
+		// Botón para añadir horario
+		echo "<button type='button' class='add_schedule_button'>Agregar horario</button>";
+
+		woocommerce_wp_textarea_input(array(
+			'id' => '_activity_ticket_types',
+			'label' => 'Tipos de entrada',
+			'description' => 'Formato JSON: [{"id":"adult","name":"Adulto","price":"20"},{"id":"child","name":"Infantil","price":"18"}]',
+			'desc_tip' => true
+		));
 
 		echo '</div>'; // Cierre del options_group
 		?>
@@ -741,6 +725,10 @@ class ActivityBooking
 				padding: 0 !important;
 				margin: 0 !important;
 			}
+
+			.woocommerce_options_panel input[type=time].short {
+				width: 100%;
+			}
 		</style>
 		<?php
 	}
@@ -753,7 +741,7 @@ class ActivityBooking
 
 		if (
 			isset($_POST['_activity_schedules_days']) && is_array($_POST['_activity_schedules_days']) &&
-			isset($_POST['_activity_schedules_start_time']) && is_array($_POST['_activity_schedules_start_time']) && 
+			isset($_POST['_activity_schedules_start_time']) && is_array($_POST['_activity_schedules_start_time']) &&
 			isset($_POST['_activity_schedules_end_time']) && is_array($_POST['_activity_schedules_end_time'])
 		) {
 
@@ -803,9 +791,14 @@ class ActivityBooking
 			update_post_meta($post_id, '_activity_collaborator', $collaborator_id);
 		}
 
-		if (isset($_POST['_activity_schedules'])) {
-			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules']));
-			update_post_meta($post_id, '_activity_schedules', $schedules);
+		if (isset($_POST['_activity_schedules_days_'])) {
+			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules_days_']));
+			update_post_meta($post_id, '_activity_schedules_days_', $schedules);
+		}
+
+		if (isset($_POST['_activity_schedules_time_'])) {
+			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules_time_']));
+			update_post_meta($post_id, '_activity_schedules_time_', $schedules);
 		}
 
 		if (isset($_POST['_activity_ticket_types'])) {
@@ -852,6 +845,9 @@ class ActivityBooking
 		if (!$product || $product->get_meta('_is_activity') !== 'yes')
 			return;
 
+		// Obtener y decodificar horarios y tipos de entrada
+		$ticket_types_json = $product->get_meta('_activity_ticket_types');
+		$ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
 		$schedules = $product->get_meta('_activity_schedules_data');
 
 		if (empty($schedules) || !is_array($schedules)) {
@@ -989,6 +985,10 @@ class ActivityBooking
 			}
 		}
 
+		// Aqui se agrega el 0.50 al precio del producto, por gestion
+		$management_fee = 0.50;
+		$total_price += $management_fee;
+
 		if (!$has_tickets) {
 			wp_send_json_error(array('message' => 'Debe seleccionar al menos una entrada'));
 		}
@@ -1049,12 +1049,15 @@ class ActivityBooking
 	private function get_schedule_info($schedule_id, $product_id)
 	{
 		$product = wc_get_product($product_id);
-		$schedules_json = $product->get_meta('_activity_schedules');
-		$schedules = $schedules_json ? json_decode($schedules_json, true) : array();
+		$schedules = $product->get_meta('_activity_schedules_data');
+
+		if (empty($schedules) || !is_array($schedules)) {
+			return 'Horario no encontrado';
+		}
 
 		foreach ($schedules as $schedule) {
-			if ($schedule['id'] == $schedule_id) {
-				return $schedule['day'] . ' de ' . $schedule['time'];
+			if (isset($schedule['id']) && $schedule['id'] == $schedule_id) {
+				return $schedule['day'] . ' de ' . $schedule['start_time'] . ' a ' . $schedule['end_time'];
 			}
 		}
 
