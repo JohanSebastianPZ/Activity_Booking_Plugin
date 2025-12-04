@@ -219,6 +219,8 @@ class ActivityBooking
 
 		// Hooks de fronted para mostrar campos de Facturación en "Detalles de la Cuenta"
 		add_action('woocommerce_edit_account_form', array($this, 'add_frontend_collaborator_fields'));
+
+		add_action('save_post', array($this, 'save_activity_schedules'));
 	}
 
 	// Nuevo método para mostrar los campos en el perfil de usuario 
@@ -488,7 +490,6 @@ class ActivityBooking
 		return json_encode($details);
 	}
 
-	// Añadir campo de colaborador a productos
 	public function add_activity_fields()
 	{
 		woocommerce_wp_checkbox(array(
@@ -499,7 +500,6 @@ class ActivityBooking
 
 		echo '<div class="options_group">';
 
-		// Campo para colaborador
 		$collaborators = get_users(array('role' => 'activity_collaborator'));
 		$collaborator_options = array('' => 'Seleccionar colaborador');
 
@@ -514,13 +514,85 @@ class ActivityBooking
 			'description' => 'Selecciona el colaborador responsable de esta actividad'
 		));
 
-		// Campos existentes...
-		woocommerce_wp_textarea_input(array(
-			'id' => '_activity_schedules',
-			'label' => 'Horarios de la actividad',
-			'description' => 'Formato JSON: [{"id":"1","day":"Sábado","time":"17h a 19h"},{"id":"2","day":"Domingo","time":"10h a 12h"}]',
-			'desc_tip' => true
-		));
+		global $post; // objeto global $post para obtener los metadatos
+		$post_id = $post->ID;
+
+		// Obtener los datos guardados
+		$saved_schedules = get_post_meta($post_id, '_activity_schedules_data', true);
+
+		// Inicializar con un bloque vacío si no hay datos guardados
+		if (empty($saved_schedules) || !is_array($saved_schedules)) {
+			$saved_schedules = [
+				['day' => '', 'start_time' => '', 'end_time' => '']
+			];
+		}
+
+		// Dias de la semana
+		$options = [
+			'days' => ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+		];
+
+		$options_days = $options['days'];
+
+		$counter = 0; // Inicialización del contador para IDs/Nombres
+
+		foreach ($saved_schedules as $schedule) {
+			$current_day = $schedule['day'];
+			$current_start_time = isset($schedule['start_time']) ? $schedule['start_time'] : ''; // Asegurarse de tener la llave
+			$current_end_time = isset($schedule['end_time']) ? $schedule['end_time'] : '';
+
+			$extra_class = '';
+
+			echo '<div class="date_product' . $extra_class . '">';
+			echo '<p>Fecha</p>';
+			echo '<div class="container">';
+			echo '<div class="date">';
+
+			// SELECT DÍA
+			woocommerce_wp_select(array(
+				'id' => "_activity_schedules_days_{$counter}",
+				'name' => '_activity_schedules_days[]', // Array para guardar múltiples valores
+				'label' => 'Día:',
+				'options' => array_combine($options_days, array_map('ucfirst', $options_days)),
+				'value' => $current_day, // Carga el valor guardado
+				'description' => '',
+				'desc_tip' => true
+			));
+
+			// SELECT HORARIO INICIO 
+			woocommerce_wp_text_input(array(
+				'id' => "_activity_schedules_start_time_{$counter}",
+				'name' => '_activity_schedules_start_time[]',
+				'label' => __('Hora inicio', 'text-domain'),
+				'value' => $current_start_time,
+				'type' => 'time',
+				'class' => 'short wc_input_time',
+				'desc_tip' => true,
+			));
+
+			// SELECT HORARIO FIN
+			woocommerce_wp_text_input(array(
+				'id' => "_activity_schedules_end_time_{$counter}",
+				'name' => '_activity_schedules_end_time[]', // ¡CRUCIAL!
+				'label' => __('Hora fin', 'text-domain'),
+				'value' => $current_end_time, // Carga el valor guardado
+				'type' => 'time',             // <-- Tipo de input
+				'class' => 'short wc_input_time',
+				'desc_tip' => true,
+			));
+
+			// Botón Eliminar
+			echo "<button type='button' class='remove_schedule_button'>Eliminar</button>";
+
+			echo "</div>";
+			echo "</div>";
+			echo "</div>";
+
+			$counter++; // Incremento
+		}
+
+		// Botón para añadir horario
+		echo "<button type='button' class='add_schedule_button'>Agregar horario</button>";
 
 		woocommerce_wp_textarea_input(array(
 			'id' => '_activity_ticket_types',
@@ -529,7 +601,179 @@ class ActivityBooking
 			'desc_tip' => true
 		));
 
-		echo '</div>';
+		echo '</div>'; // Cierre del options_group
+		?>
+
+		<!--
+		Este bloque javascript permite agregar nuevos horarios,  eliminar horarios existentes, mantemiendo siempre un horario en uso 
+		y permitiendo la actualizacion correcta del DOM.
+		-->
+		<script type="text/javascript">
+			jQuery(document).ready(function ($) {
+
+				// Función para actualizar el estado de los botones (Ocultar/Mostrar Eliminar)
+				function update_schedule_buttons() {
+					var $schedules = $('.date_product');
+					var total = $schedules.length;
+
+					$schedules.each(function (index) {
+						var $button = $(this).find('.remove_schedule_button');
+
+						if (total === 1 && index === 0) {
+							$button.hide();
+						} else {
+							$button.show();
+						}
+					});
+				}
+
+				var counter = $('.date_product').length;
+				var template = $('.date_product').first().clone();
+
+				// 1. Limpiar la plantilla para futuras copias (Importante para que los nuevos NO estén ocultos).
+				template.removeClass('is-initial-block');
+				template.find('.remove_schedule_button').show(); // Asegura que el botón de la copia sea visible
+
+				// 2. Inicializar el estado de los botones al cargar (ocultar el botón si solo hay 1)
+				update_schedule_buttons();
+
+				// FUNCIONALIDAD AGREGAR
+				$('.add_schedule_button').on('click', function (e) {
+					e.preventDefault();
+
+					var new_schedule = template.clone();
+
+					// Limpiar valores clonados y actualizar IDs únicos
+					new_schedule.find('select').each(function () {
+						var old_id = $(this).attr('id');
+						var new_id = old_id.substring(0, old_id.lastIndexOf('_')) + '_' + counter;
+						$(this).attr('id', new_id);
+						$(this).val(''); // Resetear el valor
+					});
+
+					// Insertar la nueva estructura antes del botón 'Agregar Fecha'
+					$(this).before(new_schedule);
+
+					counter++;
+					update_schedule_buttons(); // Actualiza el estado (ahora muestra todos)
+				});
+
+				// FUNCIONALIDAD ELIMINAR
+				$(document).on('click', '.remove_schedule_button', function (e) {
+					e.preventDefault();
+
+					// Comprueba que no estamos eliminando el último bloque
+					if ($('.date_product').length > 1) {
+						$(this).closest('.date_product').remove();
+						// Llama a la función después de un breve retraso para que el DOM se actualice antes del recuento.
+						setTimeout(update_schedule_buttons, 10);
+					}
+				});
+
+			});
+		</script>
+		<style>
+			.date_product {
+				display: flex;
+				gap: 10px;
+			}
+
+			.date {
+				display: flex;
+				border: 1px solid black;
+				border-radius: 5px;
+				flex-grow: 1;
+				gap: 15px;
+				padding: 10px;
+				margin-bottom: 10px;
+			}
+
+			.date .form-field {
+				display: flex !important;
+				flex-direction: row;
+				align-items: center;
+				gap: 6px;
+				margin: 0 !important;
+				padding: 0 !important;
+				width: auto !important;
+			}
+
+			.date .form-field label {
+				margin: 0 !important;
+				padding: 0 !important;
+				width: auto !important;
+				float: none !important;
+				white-space: nowrap;
+			}
+
+			.date .form-field select {
+				flex: 1 1 auto !important;
+				width: auto !important;
+				min-width: 0 !important;
+			}
+
+
+			/* Ocultamiento del botón inicial solo por la clase que el JS añade si es necesario */
+			.date_product.is-initial-block .remove_schedule_button {
+				display: none !important;
+			}
+
+			.woocommerce_options_panel .form-field[class*='_activity_schedules_days_'],
+			.woocommerce_options_panel .form-field[class*='_activity_schedules_start_time_'],
+			.woocommerce_options_panel .form-field[class*='_activity_schedules_end_time_'] {
+				padding: 0 !important;
+				margin: 0 !important;
+			}
+
+			.woocommerce_options_panel input[type=time].short {
+				width: 100%;
+			}
+		</style>
+		<?php
+	}
+	public function save_activity_schedules($post_id)
+	{
+		// Verificacion permisos del usuario
+		if (!current_user_can('edit_post', $post_id)) {
+			return;
+		}
+
+		if (
+			isset($_POST['_activity_schedules_days']) && is_array($_POST['_activity_schedules_days']) &&
+			isset($_POST['_activity_schedules_start_time']) && is_array($_POST['_activity_schedules_start_time']) &&
+			isset($_POST['_activity_schedules_end_time']) && is_array($_POST['_activity_schedules_end_time'])
+		) {
+
+			$days = array_map('sanitize_text_field', $_POST['_activity_schedules_days']);
+			$start_times = array_map('sanitize_text_field', $_POST['_activity_schedules_start_time']); // <-- Obtener horas de inicio
+			$end_times = array_map('sanitize_text_field', $_POST['_activity_schedules_end_time']);   // <-- Obtener horas de fin
+
+			$schedules = [];
+
+			// Combinar Día, Hora de Inicio y Hora de Fin
+			foreach ($days as $index => $day) {
+				$start_time = isset($start_times[$index]) ? $start_times[$index] : '';
+				$end_time = isset($end_times[$index]) ? $end_times[$index] : '';
+
+				// Solo guarda si el día NO está vacío Y si AMBAS horas están presentes
+				if (!empty($day) && !empty($start_time) && !empty($end_time)) {
+					$schedules[] = [
+						'id' => $index + 1,
+						'day' => $day,
+						'start_time' => $start_time, // <-- Guardar hora de inicio
+						'end_time' => $end_time,   // <-- Guardar hora de fin
+					];
+				}
+			}
+
+			if (!empty($schedules)) {
+				update_post_meta($post_id, '_activity_schedules_data', $schedules);
+			} else {
+				delete_post_meta($post_id, '_activity_schedules_data');
+			}
+		} else {
+			delete_post_meta($post_id, '_activity_schedules_data');
+		}
 	}
 
 	public function save_activity_fields($post_id)
@@ -546,9 +790,14 @@ class ActivityBooking
 			update_post_meta($post_id, '_activity_collaborator', $collaborator_id);
 		}
 
-		if (isset($_POST['_activity_schedules'])) {
-			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules']));
-			update_post_meta($post_id, '_activity_schedules', $schedules);
+		if (isset($_POST['_activity_schedules_days_'])) {
+			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules_days_']));
+			update_post_meta($post_id, '_activity_schedules_days_', $schedules);
+		}
+
+		if (isset($_POST['_activity_schedules_time_'])) {
+			$schedules = wp_kses_post(wp_unslash($_POST['_activity_schedules_time_']));
+			update_post_meta($post_id, '_activity_schedules_time_', $schedules);
 		}
 
 		if (isset($_POST['_activity_ticket_types'])) {
@@ -586,7 +835,6 @@ class ActivityBooking
 		}
 	}
 
-
 	public function booking_modal_html()
 	{
 		if (!is_product())
@@ -597,17 +845,14 @@ class ActivityBooking
 			return;
 
 		// Obtener y decodificar horarios y tipos de entrada
-		$schedules_json = $product->get_meta('_activity_schedules');
 		$ticket_types_json = $product->get_meta('_activity_ticket_types');
-
-		$schedules = $schedules_json ? json_decode($schedules_json, true) : array();
 		$ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
+		$schedules = $product->get_meta('_activity_schedules_data');
 
-		// Si no hay datos, usar valores por defecto
-		if (empty($schedules)) {
+		if (empty($schedules) || !is_array($schedules)) {
 			$schedules = array(
-				array('id' => '1', 'day' => 'Sábado', 'time' => '17h a 19h'),
-				array('id' => '2', 'day' => 'Domingo', 'time' => '10h a 12h')
+				array('id' => '1', 'day' => 'Sábado', 'start_time' => '17:00', 'end_time' => '19:00'),
+				array('id' => '2', 'day' => 'Domingo', 'start_time' => '10:00', 'end_time' => '12:00')
 			);
 		}
 
@@ -633,7 +878,7 @@ class ActivityBooking
 								<?php foreach ($schedules as $schedule): ?>
 									<label>
 										<input type="radio" name="booking_schedule" value="<?php echo esc_attr($schedule['id']); ?>" required>
-										<strong><?php echo esc_html($schedule['day']) . ' de ' . esc_html($schedule['time']); ?></strong>
+										<strong> <?php echo esc_html($schedule['day']) . ' de ' . esc_html($schedule['start_time']) . ' a ' . esc_html($schedule['end_time']); ?></strong>
 									</label>
 								<?php endforeach; ?>
 							</div>
@@ -739,6 +984,10 @@ class ActivityBooking
 			}
 		}
 
+		// Aqui se agrega el 0.50 al precio del producto, por gestion
+		$management_fee = 0.50;
+		$total_price += $management_fee;
+
 		if (!$has_tickets) {
 			wp_send_json_error(array('message' => 'Debe seleccionar al menos una entrada'));
 		}
@@ -799,12 +1048,15 @@ class ActivityBooking
 	private function get_schedule_info($schedule_id, $product_id)
 	{
 		$product = wc_get_product($product_id);
-		$schedules_json = $product->get_meta('_activity_schedules');
-		$schedules = $schedules_json ? json_decode($schedules_json, true) : array();
+		$schedules = $product->get_meta('_activity_schedules_data');
+
+		if (empty($schedules) || !is_array($schedules)) {
+			return 'Horario no encontrado';
+		}
 
 		foreach ($schedules as $schedule) {
-			if ($schedule['id'] == $schedule_id) {
-				return $schedule['day'] . ' de ' . $schedule['time'];
+			if (isset($schedule['id']) && $schedule['id'] == $schedule_id) {
+				return $schedule['day'] . ' de ' . $schedule['start_time'] . ' a ' . $schedule['end_time'];
 			}
 		}
 
