@@ -66,6 +66,8 @@ class ActivityBooking
 	{
 		add_action('init', array($this, 'init'));
 		register_activation_hook(__FILE__, array($this, 'activate_plugin'));
+		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+
 
 		// Inicializar componentes
 		$this->db_manager = new BookingDatabase();
@@ -594,12 +596,71 @@ class ActivityBooking
 		// Botón para añadir horario
 		echo "<button type='button' class='add_schedule_button'>Agregar horario</button>";
 
-		woocommerce_wp_textarea_input(array(
-			'id' => '_activity_ticket_types',
-			'label' => 'Tipos de entrada',
-			'description' => 'Formato JSON: [{"id":"adult","name":"Adulto","price":"20"},{"id":"child","name":"Infantil","price":"18"}]',
-			'desc_tip' => true
-		));
+
+		// Logica de visualizacion para tipos de entrada        
+
+        echo '<div style="margin-bottom: 20px;">';
+        
+
+        global $post;
+        $post_id = $post->ID;
+        $ticket_types_json = get_post_meta($post_id, '_activity_ticket_types', true);
+        $saved_ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
+
+        // Inicializar con un bloque vacío si no hay datos guardados
+        if (empty($saved_ticket_types) || !is_array($saved_ticket_types)) {
+            $saved_ticket_types = [
+                ['name' => '', 'price' => '']
+            ];
+        }
+
+        $ticket_counter = 0;
+
+        foreach ($saved_ticket_types as $ticket) {
+            $current_name = isset($ticket['name']) ? $ticket['name'] : '';
+            $current_price = isset($ticket['price']) ? $ticket['price'] : '';
+
+            // Usamos las mismas CLASES que Horarios para la uniformidad visual
+            echo '<div class="date_product ticket_product_row">'; 
+            echo '<div class="container">';
+            echo '<div class="entrada">'; 
+
+            // 1. CAMPO NOMBRE DE ENTRADA (Antiguo 'Tipo de Entrada')
+            woocommerce_wp_text_input(array(
+                'id' => "_activity_ticket_name_{$ticket_counter}",
+                'name' => '_activity_ticket_name[]', // Array para guardar múltiples nombres
+                'label' => __('Tipos de Entrada:', 'text-domain'),
+                'value' => $current_name,
+                'class' => 'short', // Clase para el ancho
+                'desc_tip' => true,
+            ));
+
+            // 2. CAMPO PRECIO
+            woocommerce_wp_text_input(array(
+                'id' => "_activity_ticket_price_{$ticket_counter}",
+                'name' => '_activity_ticket_price[]', // Array para guardar múltiples precios
+                'label' => __('Precio (€):', 'text-domain'),
+                'value' => $current_price,
+                'type' => 'number',
+                'custom_attributes' => array('step' => 'any', 'min' => '0'),
+                'class' => 'short wc_input_price',
+                'desc_tip' => true,
+            ));
+
+            // 3. Botón Eliminar (Replicar el botón de Horarios)
+            echo "<button type='button' class='remove_schedule_button'>Eliminar</button>"; 
+            
+            echo "</div>";
+            echo "</div>";
+            echo "</div>"; // Cierra date_product
+
+            $ticket_counter++;
+        }
+
+        // Botón para añadir entrada (Necesitará su propio JS de repetición)
+        echo "<button type='button' class='add_ticket_button'>Agregar Tipo de Entrada</button>";
+        echo '</div>'; // Cierre del div de margen
+		
 
 		echo '</div>'; // Cierre del options_group
 		?>
@@ -731,6 +792,69 @@ class ActivityBooking
 		</style>
 		<?php
 	}
+
+	// =========================================================
+    // MÉTODO AUXILIAR PARA RENDERIZAR UNA FILA (REPETIDOR)
+    // =========================================================
+    private function render_ticket_row($index, $id_value, $price_value, $select_options) {
+        ?>
+        <div class="date ticket-type-row" data-row="<?php echo esc_attr($index); ?>" 
+            style="padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between;">
+            
+            <?php woocommerce_wp_hidden_input([
+                'id' => "_activity_ticket_types[{$index}][id]",
+                'value' => esc_attr($id_value),
+                'name' => "_activity_ticket_types[{$index}][id]"
+            ]); ?>
+
+            <p class="form-field type_select_field" style="display: flex; gap: 5px; align-items: center; margin: 0;">
+                <label for="_activity_ticket_types[<?php echo esc_attr($index); ?>][id]">Tipo de Entrada:</label>
+                <select name="_activity_ticket_types[<?php echo esc_attr($index); ?>][id]" id="_activity_ticket_types[<?php echo esc_attr($index); ?>][id]" class="short">
+                <?php foreach ($select_options as $key => $label): ?>
+                    <option value="<?php echo esc_attr($key); ?>" <?php selected($id_value, $key, false); ?>>
+                        <?php echo esc_html($label); ?>
+                    </option>
+                <?php endforeach; ?>
+                </select>
+            </p>
+
+            <?php woocommerce_wp_text_input([
+                'id' => "_activity_ticket_types[{$index}][price]",
+                'label' => 'Precio (€)',
+                'placeholder' => '0.00',
+                'value' => esc_attr($price_value),
+                'name' => "_activity_ticket_types[{$index}][price]",
+                'data_type' => 'price',
+                'wrapper_class' => 'form-field',
+                'style' => 'width: 100px; margin: 0;' // Estilo para uniformidad de inputs
+            ]); ?>
+
+            <button type="button" class="remove-ticket-row button button-small">Eliminar</button>
+            
+        </div>
+        <?php
+    }
+
+	// Dentro de la clase ActivityBooking, añade este nuevo método:
+public function enqueue_admin_scripts($hook) {
+    global $post;
+
+    // Condición para cargar el script solo en la pantalla de edición de productos
+    if (!in_array($hook, array('post.php', 'post-new.php')) || ($post && 'product' != $post->post_type)) {
+        return;
+    }
+
+    // Encolar el script (AJUSTA LA RUTA SI ES NECESARIO)
+    // Asumimos que tu archivo está en: [ruta-del-plugin]/assets/js/admin-repeater.js
+    wp_enqueue_script(
+        'booking-admin-repeater-js',
+        plugin_dir_url(__FILE__) . 'assets/js/admin-repeater.js', // <-- RUTA CRÍTICA
+        array('jquery'),
+        '1.0', // Versión
+        true   // Cargar en el footer
+    );
+}
+
 	public function save_activity_schedules($post_id)
 	{
 		// Verificacion permisos del usuario
@@ -800,10 +924,41 @@ class ActivityBooking
 			update_post_meta($post_id, '_activity_schedules_time_', $schedules);
 		}
 
-		if (isset($_POST['_activity_ticket_types'])) {
-			$ticket_types = wp_kses_post(wp_unslash($_POST['_activity_ticket_types']));
-			update_post_meta($post_id, '_activity_ticket_types', $ticket_types);
-		}
+// 🎯 CÓDIGO CORREGIDO PARA TIPOS DE ENTRADA (JSON ENCODE) 🎯
+        if (
+            isset($_POST['_activity_ticket_name']) && is_array($_POST['_activity_ticket_name']) &&
+            isset($_POST['_activity_ticket_price']) && is_array($_POST['_activity_ticket_price'])
+        ) {
+            $names = array_map('sanitize_text_field', $_POST['_activity_ticket_name']);
+            $prices = array_map('sanitize_text_field', $_POST['_activity_ticket_price']);
+            
+            $ticket_types = [];
+            
+            // Combinar Nombres y Precios
+            foreach ($names as $index => $name) {
+                $price = isset($prices[$index]) ? $prices[$index] : '';
+                
+                // Solo guardar si el Nombre y el Precio no están vacíos
+                if (!empty($name) && !empty($price)) {
+                    $ticket_types[] = [
+                        // Usamos un ID único como índice técnico (uniqid() o índice)
+                        'id' => $index + 1, // Usamos el índice de array como ID técnico (como hace el compañero con Horarios)
+                        'name' => $name,
+                        'price' => floatval($price),
+                    ];
+                }
+            }
+
+            if (!empty($ticket_types)) {
+                // Conversión: ARRAY PHP a STRING JSON
+                $ticket_types_json = json_encode($ticket_types);
+                update_post_meta($post_id, '_activity_ticket_types', $ticket_types_json);
+            } else {
+                delete_post_meta($post_id, '_activity_ticket_types');
+            }
+        } else {
+            delete_post_meta($post_id, '_activity_ticket_types');
+        }
 	}
 
 	public function enqueue_scripts()
