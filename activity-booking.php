@@ -620,25 +620,25 @@ class ActivityBooking
             $current_name = isset($ticket['name']) ? $ticket['name'] : '';
             $current_price = isset($ticket['price']) ? $ticket['price'] : '';
 
-            // Usamos las mismas CLASES que Horarios para la uniformidad visual
+            
             echo '<div class="date_product ticket_product_row">'; 
             echo '<div class="container">';
             echo '<div class="entrada">'; 
 
-            // 1. CAMPO NOMBRE DE ENTRADA (Antiguo 'Tipo de Entrada')
+            // 1. Campo Tipo de Entrada
             woocommerce_wp_text_input(array(
                 'id' => "_activity_ticket_name_{$ticket_counter}",
-                'name' => '_activity_ticket_name[]', // Array para guardar múltiples nombres
+                'name' => '_activity_ticket_name[]', 
                 'label' => __('Tipos de Entrada:', 'text-domain'),
                 'value' => $current_name,
-                'class' => 'short', // Clase para el ancho
+                'class' => 'short', 
                 'desc_tip' => true,
             ));
 
-            // 2. CAMPO PRECIO
+            // 2. Campo precio
             woocommerce_wp_text_input(array(
                 'id' => "_activity_ticket_price_{$ticket_counter}",
-                'name' => '_activity_ticket_price[]', // Array para guardar múltiples precios
+                'name' => '_activity_ticket_price[]', 
                 'label' => __('Precio (€):', 'text-domain'),
                 'value' => $current_price,
                 'type' => 'number',
