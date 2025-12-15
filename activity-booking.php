@@ -380,6 +380,75 @@ class ActivityBooking
 		}
 	}
 
+public function set_custom_cart_item_price($cart)
+{
+    if (is_admin() && !defined('DOING_AJAX')) {
+        return;
+    }
+
+    if (did_action('woocommerce_before_calculate_totals') >= 2) {
+        return;
+    }
+
+    foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
+        
+        // Verificar que sea una reserva de actividad
+        if (!isset($cart_item['booking_total_price'])) {
+            continue;
+        }
+
+        $product_id = $cart_item['product_id'];
+        
+        // 1. Recuperar la Regla Guardada
+        $cantidad_minima = intval(get_post_meta($product_id, 'cantidad_minima_descuento', true));
+        $precio_descuento = floatval(get_post_meta($product_id, 'precio_descuento_volumen', true));
+        
+        // DEBUG: Descomentar para verificar
+         error_log("Product ID: $product_id");
+         error_log("Cantidad mínima: $cantidad_minima");
+         error_log("Precio descuento: $precio_descuento");
+        
+        // 2. Obtener la Cantidad TOTAL de Entradas
+        $cantidad_total_entradas = 0;
+        if (isset($cart_item['booking_tickets']) && is_array($cart_item['booking_tickets'])) {
+            foreach ($cart_item['booking_tickets'] as $ticket_quantity) {
+                $cantidad_total_entradas += (int) $ticket_quantity;
+            }
+        }
+        
+        // DEBUG: Descomentar para verificar
+         error_log("Cantidad total entradas: $cantidad_total_entradas");
+        
+        // 3. VERIFICAR si debe aplicar descuento
+        if ($cantidad_minima > 0 && $precio_descuento > 0 && $cantidad_total_entradas >= $cantidad_minima) {
+            
+            // El precio de descuento debe incluir la gestión de 0.50€
+            $precio_unitario_final = $precio_descuento + 0.50;
+            
+            // Calcular nuevo precio total
+            $nuevo_precio_total = $cantidad_total_entradas * $precio_unitario_final;
+            
+            // DEBUG: Descomentar para verificar
+             error_log("¡DESCUENTO APLICADO!");
+             error_log("Precio unitario final: $precio_unitario_final");
+             error_log("Nuevo precio total: $nuevo_precio_total");
+            
+            // Aplicar el nuevo precio
+            $cart_item['data']->set_price($nuevo_precio_total);
+            
+        } else {
+            // Sin descuento: usar el precio original de la reserva
+            $precio_total_original = (float) $cart_item['booking_total_price'];
+            $cart_item['data']->set_price($precio_total_original);
+            
+            // DEBUG: Descomentar para verificar
+             error_log("Sin descuento aplicado");
+             error_log("Precio original: $precio_total_original");
+        }
+    }
+}
+
+	/*
 	// Nuevo método para establecer precio personalizado
 	public function set_custom_cart_item_price($cart)
 	{
@@ -393,10 +462,43 @@ class ActivityBooking
 
 		foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
 			if (isset($cart_item['booking_total_price'])) {
-				$cart_item['data']->set_price($cart_item['booking_total_price']);
+				$precio_total_reserva = (float) $cart_item['booking_total_price'];
+                $product_id = $cart_item['product_id'];
+                
+                // 1. Recuperar la Regla Guardada
+                $n_minima = intval(get_post_meta($product_id, 'cantidad_minima_descuento', true));
+                $p_descuento = floatval(get_post_meta($product_id, 'precio_descuento_volumen', true));
+                
+                // 2. Obtener la Cantidad de Entradas Vendidas
+                // Nota: Usted guarda cada reserva como una unidad (cantidad 1) en el carrito
+                // Los tickets reales están en $cart_item['booking_tickets']. Necesitamos la suma.
+                $cantidad_entradas_reales = 0;
+                if (isset($cart_item['booking_tickets']) && is_array($cart_item['booking_tickets'])) {
+                    foreach ($cart_item['booking_tickets'] as $quantity) {
+                        $cantidad_entradas_reales += (int) $quantity;
+                    }
+                }
+                
+                // 3. Aplicar Lógica de Descuento Global (Solo si la regla existe)
+                if ($n_minima > 0 && $p_descuento > 0 && $cantidad_entradas_reales >= $n_minima) {
+                    
+                    // El precio de descuento (P) que guarda el colaborador NO incluye los 0.50€ de gestión.
+                    // Ajustamos el precio de descuento para incluir la tarifa de gestión:
+                    $precio_unitario_con_gestion = $p_descuento + 0.50; 
+                    
+                    // Calculamos el nuevo precio total de la reserva (Todas las entradas a precio P + Gestión)
+                    $nuevo_precio_total = $cantidad_entradas_reales * $precio_unitario_con_gestion;
+                    
+                    // Aplicar el nuevo precio total
+                    $cart_item['data']->set_price( $nuevo_precio_total );
+                    
+                } else {
+                    // Si no aplica el descuento por volumen, aplicamos el precio original calculado en add_booking_to_cart
+                    $cart_item['data']->set_price($precio_total_reserva);
+                }
 			}
 		}
-	}
+	}*/
 
 
 	// Método para crear registro de reserva cuando se complete el pedido
@@ -663,7 +765,33 @@ class ActivityBooking
 		
 
 		echo '</div>'; // Cierre del options_group
+
+		echo '<div>';
+
+			woocommerce_wp_text_input(array(
+				'id' => 'cantidad_minima_descuento',
+				'name' => 'cantidad_minima_descuento',
+				'label' => __('Cantidad Mínima para Descuento', 'text-domain'),
+				'value' => get_post_meta($post->ID, 'cantidad_minima_descuento',true),
+				'type' => 'number',
+				'placeholder' => 'Ej: 4',
+				'class' => 'short wc_input_price',
+				'custom_attributes' => array('step' => '1','min'  => '2')
+			));
+
+			woocommerce_wp_text_input(array(
+				'id'          => 'precio_descuento_volumen',
+				'name'        => 'precio_descuento_volumen',
+				'label'       => __('Precio Unitario de Descuento', 'text-domain'),
+				'value'       => get_post_meta($post->ID, 'precio_descuento_volumen', true), 
+				'placeholder' => 'Ej: 60.00',
+				'class'       => 'short wc_input_price',
+				'custom_attributes' => array('step' => 'any','min'  => '0')
+			));
+
+		echo '</div>'
 		?>
+
 
 		<!--
 		Este bloque javascript permite agregar nuevos horarios,  eliminar horarios existentes, mantemiendo siempre un horario en uso 
@@ -836,24 +964,24 @@ class ActivityBooking
     }
 
 	// Dentro de la clase ActivityBooking, añade este nuevo método:
-public function enqueue_admin_scripts($hook) {
-    global $post;
+	public function enqueue_admin_scripts($hook) {
+		global $post;
 
-    // Condición para cargar el script solo en la pantalla de edición de productos
-    if (!in_array($hook, array('post.php', 'post-new.php')) || ($post && 'product' != $post->post_type)) {
-        return;
-    }
+		// Condición para cargar el script solo en la pantalla de edición de productos
+		if (!in_array($hook, array('post.php', 'post-new.php')) || ($post && 'product' != $post->post_type)) {
+			return;
+		}
 
-    // Encolar el script (AJUSTA LA RUTA SI ES NECESARIO)
-    // Asumimos que tu archivo está en: [ruta-del-plugin]/assets/js/admin-repeater.js
-    wp_enqueue_script(
-        'booking-admin-repeater-js',
-        plugin_dir_url(__FILE__) . 'assets/js/admin-repeater.js', // <-- RUTA CRÍTICA
-        array('jquery'),
-        '1.0', // Versión
-        true   // Cargar en el footer
-    );
-}
+		// Encolar el script (AJUSTA LA RUTA SI ES NECESARIO)
+		// Asumimos que tu archivo está en: [ruta-del-plugin]/assets/js/admin-repeater.js
+		wp_enqueue_script(
+			'booking-admin-repeater-js',
+			plugin_dir_url(__FILE__) . 'assets/js/admin-repeater.js', // <-- RUTA CRÍTICA
+			array('jquery'),
+			'1.0', // Versión
+			true   // Cargar en el footer
+		);
+	}
 
 	public function save_activity_schedules($post_id)
 	{
@@ -924,7 +1052,7 @@ public function enqueue_admin_scripts($hook) {
 			update_post_meta($post_id, '_activity_schedules_time_', $schedules);
 		}
 
-// 🎯 CÓDIGO CORREGIDO PARA TIPOS DE ENTRADA (JSON ENCODE) 🎯
+		//Código para tipos de entrada (Json encode).
         if (
             isset($_POST['_activity_ticket_name']) && is_array($_POST['_activity_ticket_name']) &&
             isset($_POST['_activity_ticket_price']) && is_array($_POST['_activity_ticket_price'])
@@ -941,8 +1069,8 @@ public function enqueue_admin_scripts($hook) {
                 // Solo guardar si el Nombre y el Precio no están vacíos
                 if (!empty($name) && !empty($price)) {
                     $ticket_types[] = [
-                        // Usamos un ID único como índice técnico (uniqid() o índice)
-                        'id' => $index + 1, // Usamos el índice de array como ID técnico (como hace el compañero con Horarios)
+                        
+                        'id' => $index + 1, 
                         'name' => $name,
                         'price' => floatval($price),
                     ];
@@ -959,6 +1087,16 @@ public function enqueue_admin_scripts($hook) {
         } else {
             delete_post_meta($post_id, '_activity_ticket_types');
         }
+
+		if(!current_user_can('edit_post',$post_id)){
+			return;
+		}
+
+		$cantidad_minima = isset($_POST['cantidad_minima_descuento']) ? sanitize_text_field( $_POST['cantidad_minima_descuento'] ) : '' ;
+		update_post_meta( $post_id, 'cantidad_minima_descuento', $cantidad_minima );
+
+		$precio_descuento = isset($_POST['precio_descuento_volumen']) ? sanitize_text_field( $_POST['precio_descuento_volumen'] ) : '' ;
+		update_post_meta( $post_id, 'precio_descuento_volumen', $precio_descuento ); 
 	}
 
 	public function enqueue_scripts()
