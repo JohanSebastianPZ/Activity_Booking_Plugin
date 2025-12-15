@@ -380,75 +380,7 @@ class ActivityBooking
 		}
 	}
 
-public function set_custom_cart_item_price($cart)
-{
-    if (is_admin() && !defined('DOING_AJAX')) {
-        return;
-    }
-
-    if (did_action('woocommerce_before_calculate_totals') >= 2) {
-        return;
-    }
-
-    foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
-        
-        // Verificar que sea una reserva de actividad
-        if (!isset($cart_item['booking_total_price'])) {
-            continue;
-        }
-
-        $product_id = $cart_item['product_id'];
-        
-        // 1. Recuperar la Regla Guardada
-        $cantidad_minima = intval(get_post_meta($product_id, 'cantidad_minima_descuento', true));
-        $precio_descuento = floatval(get_post_meta($product_id, 'precio_descuento_volumen', true));
-        
-        // DEBUG: Descomentar para verificar
-         error_log("Product ID: $product_id");
-         error_log("Cantidad mínima: $cantidad_minima");
-         error_log("Precio descuento: $precio_descuento");
-        
-        // 2. Obtener la Cantidad TOTAL de Entradas
-        $cantidad_total_entradas = 0;
-        if (isset($cart_item['booking_tickets']) && is_array($cart_item['booking_tickets'])) {
-            foreach ($cart_item['booking_tickets'] as $ticket_quantity) {
-                $cantidad_total_entradas += (int) $ticket_quantity;
-            }
-        }
-        
-        // DEBUG: Descomentar para verificar
-         error_log("Cantidad total entradas: $cantidad_total_entradas");
-        
-        // 3. VERIFICAR si debe aplicar descuento
-        if ($cantidad_minima > 0 && $precio_descuento > 0 && $cantidad_total_entradas >= $cantidad_minima) {
-            
-            // El precio de descuento debe incluir la gestión de 0.50€
-            $precio_unitario_final = $precio_descuento + 0.50;
-            
-            // Calcular nuevo precio total
-            $nuevo_precio_total = $cantidad_total_entradas * $precio_unitario_final;
-            
-            // DEBUG: Descomentar para verificar
-             error_log("¡DESCUENTO APLICADO!");
-             error_log("Precio unitario final: $precio_unitario_final");
-             error_log("Nuevo precio total: $nuevo_precio_total");
-            
-            // Aplicar el nuevo precio
-            $cart_item['data']->set_price($nuevo_precio_total);
-            
-        } else {
-            // Sin descuento: usar el precio original de la reserva
-            $precio_total_original = (float) $cart_item['booking_total_price'];
-            $cart_item['data']->set_price($precio_total_original);
-            
-            // DEBUG: Descomentar para verificar
-             error_log("Sin descuento aplicado");
-             error_log("Precio original: $precio_total_original");
-        }
-    }
-}
-
-	/*
+	
 	// Nuevo método para establecer precio personalizado
 	public function set_custom_cart_item_price($cart)
 	{
@@ -498,7 +430,7 @@ public function set_custom_cart_item_price($cart)
                 }
 			}
 		}
-	}*/
+	}
 
 
 	// Método para crear registro de reserva cuando se complete el pedido
