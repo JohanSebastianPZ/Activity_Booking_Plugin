@@ -501,7 +501,7 @@ class CollaboratorManager
 
 	public function collaborator_dashboard_shortcode()
 	{
-		if (!is_user_logged_in() || !current_user_can('manage_activity_bookings')) {
+		if (!is_user_logged_in() || (!current_user_can('manage_activity_bookings') && !current_user_can('administrator'))) {
 			return '<p>Acceso denegado. Debes ser un colaborador para ver esta página.</p>';
 		}
 
@@ -572,12 +572,27 @@ class CollaboratorManager
 		$db_manager = new BookingDatabase();
 		$db_manager->sync_with_woocommerce_orders();
 
-		$bookings = array_filter(
-			$db_manager->get_collaborator_bookings(get_current_user_id()),
-			function ($b) {
-				return $b->status !== '0.000000' && !empty($b->status);
-			}
-		);
+        if ( current_user_can('administrator') ) {
+
+            // Admin → Ver TODAS las reservas
+            $bookings = array_filter(
+                $db_manager->get_all_bookings(),
+                function ($b) {
+                    return $b->status !== '0.000000' && !empty($b->status);
+                }
+            );
+
+        } else {
+
+            // Colaborador → Ver SOLO sus reservas
+            $bookings = array_filter(
+                $db_manager->get_collaborator_bookings(get_current_user_id()),
+                function ($b) {
+                    return $b->status !== '0.000000' && !empty($b->status);
+                }
+            );
+        }
+
 
 		wp_enqueue_script('collaborator-dashboard', plugin_dir_url(dirname(__FILE__)) . 'assets/collaborator-dashboard.js', array('jquery'), '1.0', true);
 		wp_enqueue_style(
@@ -831,7 +846,12 @@ class CollaboratorManager
 	private function render_client_bookings()
 	{
 		$db_manager = new BookingDatabase();
-		$bookings = $db_manager->get_customer_bookings(get_current_user_id());
+
+        if(current_user_can('administrator')){
+            $bookings = $db_manager->get_all_bookings();
+        }else{
+            $bookings = $db_manager->get_customer_bookings(get_current_user_id());
+        }
 
 		wp_enqueue_style(
 			'client-bookings-css',

@@ -103,6 +103,30 @@ class BookingDatabase
 		return $wpdb->get_results($wpdb->prepare($sql, $params));
 	}
 
+    public function get_all_bookings($status = null)
+    {
+        global $wpdb;
+
+        $sql = "SELECT * FROM {$this->table_name}";
+        $params = array();
+
+        // Si se pasa un estado, agregamos cláusula WHERE
+        if ($status !== null) {
+            $sql .= " WHERE status = %s";
+            $params[] = $status;
+        }
+
+        $sql .= " ORDER BY created_at DESC";
+
+        // Si no hay parámetros, no uses prepare
+        if (!empty($params)) {
+            return $wpdb->get_results($wpdb->prepare($sql, $params));
+        } else {
+            return $wpdb->get_results($sql);
+        }
+    }
+
+
 	public function get_customer_bookings($customer_id, $status = null)
 	{
 		global $wpdb;
