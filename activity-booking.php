@@ -383,6 +383,90 @@ class ActivityBooking
 	
 	// Nuevo método para establecer precio personalizado
 	public function set_custom_cart_item_price($cart)
+    {
+        // Bloqueos estándar de WooCommerce
+        if (is_admin() && !defined('DOING_AJAX')) {
+            return;
+        }
+        if (did_action('woocommerce_before_calculate_totals') >= 2) {
+            return;
+        }
+
+        foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
+            
+            // Solo procesamos ítems que tienen tickets asociados (indicando que es una reserva de actividad)
+            if (isset($cart_item['booking_tickets'])) {
+                
+                $product_id = $cart_item['product_id'];
+
+
+                
+                // 1. Recuperar TODAS las Reglas de Descuento guardadas (¡Lectura JSON!)
+                // Metadato: _activity_discount_rules
+                $discount_rules_raw = get_post_meta($product_id, '_activity_discount_rules', true);
+                $discount_rules = $discount_rules_raw ? json_decode($discount_rules_raw, true) : array();
+                
+                // 2. Obtener la Distribución de Entradas Compradas
+                // $tickets_comprados es un array asociativo: [tipo => cantidad]
+                $tickets_comprados = $cart_item['booking_tickets'];
+                
+                $nuevo_subtotal_entradas = 0.00;
+                $tarifa_gestion = 0.50; // Tarifa de gestión fija por RESERVA
+                
+                // Asegurar que las reglas sean un array usable
+                if (!is_array($discount_rules)) {
+                    $discount_rules = [];
+                }
+                
+                // 3. Iterar sobre los tickets comprados para aplicar precios por tipo
+                foreach ($tickets_comprados as $ticket_type => $quantity) {
+                    $quantity = intval($quantity);
+                    
+                    if ($quantity <= 0) {
+                        continue; // Saltar si la cantidad es cero
+                    }
+
+                    $descuento_aplicado = false;
+
+                    // 4. Buscar una regla específica para este tipo de entrada (ej. "individual")
+                    foreach ($discount_rules as $rule) {
+                        
+                        if (isset($rule['type']) && $rule['type'] === $ticket_type && 
+                            isset($rule['min_qty']) && intval($rule['min_qty']) > 0) {
+                            
+                            $min_qty = intval($rule['min_qty']);
+                            $discount_price = floatval($rule['discount_price']);
+
+                            // 5. Aplicar Lógica de Descuento
+                            if ($quantity >= $min_qty) {
+                                // Descuento APLICADO: Usar el precio unitario de descuento.
+                                $nuevo_subtotal_entradas += $quantity * $discount_price;
+                                $descuento_aplicado = true;
+                                break; // Encontramos la regla que aplica, pasar al siguiente tipo de ticket
+                            }
+                        }
+                    }
+
+                    // 6. Si NO se aplicó descuento (cantidad insuficiente o no hay regla)
+                    if (!$descuento_aplicado) {
+                        // Obtener el precio REGULAR de este tipo de entrada (ej. 86.00€)
+                        $precio_regular_unitario = $this->get_regular_price_for_ticket_type($product_id, $ticket_type); 
+                        
+                        // Usar el precio regular unitario
+                        $nuevo_subtotal_entradas += $quantity * $precio_regular_unitario;
+                    }
+                }
+                
+                // 7. Calcular el Precio Total de la RESERVA (Subtotal de Entradas + Tarifa de Gestión)
+                $nuevo_precio_total = $nuevo_subtotal_entradas + $tarifa_gestion;
+
+                // 8. Aplicar el nuevo precio total al ítem del carrito
+                $cart_item['data']->set_price($nuevo_precio_total);
+            }
+        }
+    }
+
+	/*public function set_custom_cart_item_price($cart)
 	{
 		if (is_admin() && !defined('DOING_AJAX')) {
 			return;
@@ -430,8 +514,29 @@ class ActivityBooking
                 }
 			}
 		}
-	}
+	}*/
 
+	private function get_regular_price_for_ticket_type($product_id, $ticket_type_name) {
+        
+        $ticket_types_json = get_post_meta($product_id, '_activity_ticket_types', true);
+        
+        // Usar json_decode porque sabemos que el guardado es JSON.
+        $saved_ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
+        
+        if (!empty($saved_ticket_types) && is_array($saved_ticket_types)) {
+            foreach ($saved_ticket_types as $ticket) {
+                // Compara el nombre del tipo de entrada
+                if (isset($ticket['name']) && $ticket['name'] === $ticket_type_name) {
+                    $price = isset($ticket['price']) ? floatval($ticket['price']) : 0.00;
+                    if ($price > 0) {
+                        return $price; 
+                    }
+                }
+            }
+        }
+        
+        return 0.00; 
+    }
 
 	// Método para crear registro de reserva cuando se complete el pedido
 	public function create_booking_record($order_id)
@@ -698,7 +803,110 @@ class ActivityBooking
 
 		echo '</div>'; // Cierre del options_group
 
-		echo '<div>';
+		$ticket_type_options = ['' => 'Seleccionar Tipo de Entrada'];
+        // Recorremos los tipos de entrada guardados para crear las opciones del select
+        foreach ($saved_ticket_types as $ticket) {
+            if (!empty($ticket['name'])) {
+                // Usamos el nombre del ticket como clave y valor
+                $ticket_type_options[$ticket['name']] = $ticket['name']; 
+            }
+        }
+
+		echo '<div style="margin-top: 20px;">'; // Contenedor para las reglas de descuento (Lo llamaremos 'discount_rules_container')
+
+        global $post;
+        $post_id = $post->ID;
+
+		// Obtener la cadena JSON guardada de las reglas de descuento
+    	$discount_rules_json = get_post_meta($post_id, '_activity_discount_rules', true);
+
+
+		// AÑADIMOS LA DESCODIFICACIÓN JSON
+		$saved_discount_rules = [];
+		if (!empty($discount_rules_json)) {
+			$decoded = json_decode($discount_rules_json, true);
+			
+			// Aseguramos que la decodificación fue exitosa y es un array
+			if (is_array($decoded)) {
+				$saved_discount_rules = $decoded;
+			}
+		}
+
+		// Inicializar con un bloque vacío si no hay datos guardados después de la decodificación
+		if (empty($saved_discount_rules)) {
+			// Usamos un índice temporal alto (999) para que JS lo reemplace al añadir.
+			$saved_discount_rules = [
+				['type' => '', 'min_qty' => '', 'discount_price' => '']
+			];
+		}
+
+        $rule_counter = 0;
+
+        foreach ($saved_discount_rules as $rule) {
+            $current_type = isset($rule['type']) ? $rule['type'] : '';
+            $current_min_qty = isset($rule['min_qty']) ? $rule['min_qty'] : '';
+            $current_discount_price = isset($rule['discount_price']) ? $rule['discount_price'] : '';
+
+            $index = ($rule_counter == 0 && count($saved_discount_rules) == 1 && empty($current_type)) ? 999 : $rule_counter;
+
+            // Este es el contenedor que JavaScript clonará
+            echo '<div class="date_product discount_rule_row" data-index="' . esc_attr($index) . '" style="border: 1px dashed #ccc; padding: 10px; margin-bottom: 10px;">'; 
+            echo '<div class="container">';
+            echo '<div class="discount-rule">'; 
+            
+            // 1. CAMPO CRUCIAL: TIPO DE ENTRADA APLICABLE
+            woocommerce_wp_select(array(
+                'id' => "_activity_discount_type_{$index}",
+                // Nombre del array: _activity_discount_rules[índice][type]
+                'name' => "_activity_discount_rules[{$index}][type]", 
+                'label' => __('Tipo de Entrada Aplicable:', 'text-domain'),
+                // Usamos las opciones de tipos de entrada que generamos antes
+                'options' => $ticket_type_options, 
+                'value' => $current_type,
+                'class' => 'short', 
+                'desc_tip' => true,
+            ));
+
+            // 2. Campo Cantidad Mínima
+            woocommerce_wp_text_input(array(
+                'id' => "_activity_discount_min_qty_{$index}",
+                'name' => "_activity_discount_rules[{$index}][min_qty]", 
+                'label' => __('Cantidad Mínima para Descuento', 'text-domain'),
+                'value' => $current_min_qty,
+                'type' => 'number',
+                'placeholder' => 'Ej: 3',
+                'class' => 'short wc_input_price',
+                'custom_attributes' => array('step' => '1', 'min' => '2')
+            ));
+
+            // 3. Campo Precio con Descuento
+            woocommerce_wp_text_input(array(
+                'id'          => "_activity_discount_price_{$index}",
+                'name'        => "_activity_discount_rules[{$index}][discount_price]", 
+                'label'       => __('Precio Unitario de Descuento', 'text-domain'),
+                'value'       => $current_discount_price, 
+                'placeholder' => 'Ej: 30.00',
+                'class'       => 'short wc_input_price',
+                'custom_attributes' => array('step' => 'any', 'min' => '0')
+            ));
+
+            // 4. Botón Eliminar
+            echo "<button type='button' class='remove_schedule_button remove_discount_rule'>Eliminar Regla</button>"; 
+            
+            echo "</div>"; // Cierra discount-rule
+            echo "</div>"; // Cierra container
+            echo "</div>"; // Cierra discount_rule_row
+
+            $rule_counter++;
+        }
+
+        // Botón para añadir una nueva regla
+        echo "<button type='button' class='add_ticket_button add_discount_rule'>Agregar Regla de Descuento</button>";
+        echo '</div>';
+
+
+
+		/*echo '<div>';
 
 			woocommerce_wp_text_input(array(
 				'id' => 'cantidad_minima_descuento',
@@ -721,7 +929,7 @@ class ActivityBooking
 				'custom_attributes' => array('step' => 'any','min'  => '0')
 			));
 
-		echo '</div>'
+		echo '</div>'*/
 		?>
 
 
@@ -1024,11 +1232,33 @@ class ActivityBooking
 			return;
 		}
 
-		$cantidad_minima = isset($_POST['cantidad_minima_descuento']) ? sanitize_text_field( $_POST['cantidad_minima_descuento'] ) : '' ;
-		update_post_meta( $post_id, 'cantidad_minima_descuento', $cantidad_minima );
+// Obtener el array de reglas enviado por POST
+    $discount_rules = isset($_POST['_activity_discount_rules']) ? $_POST['_activity_discount_rules'] : array();
+    
+    $clean_rules = array();
 
-		$precio_descuento = isset($_POST['precio_descuento_volumen']) ? sanitize_text_field( $_POST['precio_descuento_volumen'] ) : '' ;
-		update_post_meta( $post_id, 'precio_descuento_volumen', $precio_descuento ); 
+    if (!empty($discount_rules) && is_array($discount_rules)) {
+        foreach ($discount_rules as $rule) {
+            // Se asume que $rule es un array con 'type', 'min_qty', y 'discount_price'
+            
+            $type           = isset($rule['type']) ? sanitize_text_field($rule['type']) : '';
+            $min_qty        = isset($rule['min_qty']) ? floatval($rule['min_qty']) : 0; // Usar floatval o intval
+            $discount_price = isset($rule['discount_price']) ? floatval($rule['discount_price']) : 0.00; // Usar floatval para precios
+            
+            // Opcional: Solo guardar la regla si tiene un tipo y una cantidad mínima válida
+            if (!empty($type) && $min_qty > 0) {
+                $clean_rules[] = array(
+                    'type'           => $type,
+                    'min_qty'        => $min_qty,
+                    'discount_price' => $discount_price,
+                );
+            }
+        }
+    }
+
+    // Guardar el array limpio de reglas en un solo metadato
+	$rules_json = json_encode($clean_rules);
+    update_post_meta($post_id, '_activity_discount_rules', $rules_json);
 	}
 
 	public function enqueue_scripts()
@@ -1170,6 +1400,82 @@ class ActivityBooking
 	}
 
 	public function add_booking_to_cart()
+    {
+        check_ajax_referer('booking_nonce', 'nonce');
+
+        $product_id = intval($_POST['product_id']);
+        $schedule_id = sanitize_text_field($_POST['schedule_id']);
+        $tickets_post = isset($_POST['tickets']) ? $_POST['tickets'] : array(); // Renombramos la variable de entrada
+
+        if (empty($product_id) || empty($schedule_id)) {
+            wp_send_json_error(array('message' => 'Datos incompletos'));
+        }
+
+        // Verificar si hay al menos un ticket con cantidad mayor a 0
+        $has_tickets = false;
+        $total_price = 0;
+        $total_quantity = 0;
+
+        // Obtener información de tipos de entrada del producto
+        $product = wc_get_product($product_id);
+        $ticket_types_json = $product->get_meta('_activity_ticket_types');
+        $ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
+
+        // Nuevo array que guardará los tickets con el NOMBRE como clave
+        $tickets_for_cart = array();
+        
+        // Calcular precio total y cantidad total
+        foreach ($tickets_post as $ticket_id => $quantity) { // Iteramos sobre ID => Cantidad
+            $quantity = intval($quantity);
+            if ($quantity > 0) {
+                $has_tickets = true;
+                $total_quantity += $quantity;
+
+                // Buscar el precio y el NOMBRE del tipo de entrada
+                foreach ($ticket_types as $ticket_type) {
+                    if ($ticket_type['id'] == $ticket_id) {
+                        
+                        // 1. CÁLCULO DE PRECIO
+                        $ticket_name = $ticket_type['name']; // Obtener el nombre ('individual', 'Grupal')
+                        $ticket_price = floatval($ticket_type['price']);
+                        $total_price += ($ticket_price * $quantity);
+                        
+                        // 2. CREAR EL ARRAY PARA EL CARRITO USANDO EL NOMBRE COMO CLAVE
+                        $tickets_for_cart[$ticket_name] = $quantity; 
+                        
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Aqui se agrega el 0.50 al precio del producto, por gestion
+        $management_fee = 0.50;
+        $total_price += $management_fee;
+
+        if (!$has_tickets) {
+            wp_send_json_error(array('message' => 'Debe seleccionar al menos una entrada'));
+        }
+
+        // Preparar datos del carrito con precio personalizado
+        $cart_item_data = array(
+            'booking_schedule' => $schedule_id,
+            'booking_tickets' => $tickets_for_cart, // USAMOS EL ARRAY CORREGIDO
+            'booking_total_price' => $total_price,
+            'unique_key' => md5(microtime() . rand())
+        );
+
+        // Añadir al carrito con cantidad 1 pero precio personalizado
+        $added = WC()->cart->add_to_cart($product_id, 1, 0, array(), $cart_item_data);
+
+        if ($added) {
+            wp_send_json_success(array('message' => 'Producto añadido al carrito'));
+        } else {
+            wp_send_json_error(array('message' => 'Error al añadir al carrito'));
+        }
+    }
+
+	/*public function add_booking_to_cart()
 	{
 		check_ajax_referer('booking_nonce', 'nonce');
 
@@ -1233,7 +1539,7 @@ class ActivityBooking
 		} else {
 			wp_send_json_error(array('message' => 'Error al añadir al carrito'));
 		}
-	}
+	}*/
 
 	public function display_booking_data_cart($name, $cart_item, $cart_item_key)
 	{
