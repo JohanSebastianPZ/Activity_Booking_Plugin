@@ -1,93 +1,112 @@
 jQuery(document).ready(function($) {
-    console.log(' Admin repeater script cargado');
+    console.log(' Admin repeater script cargado (Unificado)');
+
+
+    var TICKET_TYPE_ROW_SELECTOR = '.ticket_product_row';     
+    var ADD_TICKET_TYPE_BUTTON = '.add_ticket_type_button';   
     
-    var ticket_counter = $('.ticket_product_row').length || 0;
+    var DISCOUNT_RULE_ROW_SELECTOR = '.discount_rule_row';  
+    var ADD_DISCOUNT_RULE_BUTTON = '.add_discount_rule_button';
     
-    // Clonar la plantilla del primer ticket
-    var ticket_template = $('.ticket_product_row').first().clone();
+    var REMOVE_BUTTON_SELECTOR = '.remove_schedule_button';  
     
-    if (ticket_template.length) {
-        ticket_template.find('input[type="text"], input[type="number"]').val('');
-    }
-    
-    // Botón AGREGAR TIPO DE ENTRADA
-    $('.add_ticket_button').on('click', function(e) {
-        e.preventDefault();
-        console.log(' Agregando nuevo tipo de entrada');
+
+
+    function initializeRepeater(rowSelector, addButtonSelector, isArrayIndexed) {
         
-        if (ticket_template.length === 0) {
-            console.error(' No se encontró la plantilla de ticket');
-            alert('Error: No se pudo clonar el ticket');
+        // 1. Inicializar el contador con las filas existentes
+        var counter = $(rowSelector).length;
+        
+        // 2. Clonar la plantilla del primer elemento
+        var template = $(rowSelector).first().clone();
+        
+        if (template.length) {
+            template.find('input, select').val(''); 
+            template.find(REMOVE_BUTTON_SELECTOR).show(); 
+       
+            if (isArrayIndexed) {
+                template.attr('data-index', 9999);
+            }
+        } else {
+            
             return;
         }
-        
-        // Clonar plantilla
-        var new_ticket = ticket_template.clone();
-        
-        // Limpiar valores
-        new_ticket.find('input').val('');
-        
-        // Actualizar IDs y nombres con el nuevo índice
-        new_ticket.find('input').each(function() {
-            var $input = $(this);
-            var old_id = $input.attr('id');
-            var old_name = $input.attr('name');
+
+        // --- Lógica de Añadir Fila ---
+        $(addButtonSelector).on('click', function(e) {
+            e.preventDefault();
             
-            if (old_id) {
-                var new_id = old_id.replace(/_\d+$/, '_' + ticket_counter);
-                $input.attr('id', new_id);
-            }
+            var new_row = template.clone();
             
-            if (old_name) {
-                // Mantener la estructura de array []
-                // No modificar el nombre, solo el ID
-            }
+            // Limpiar valores
+            new_row.find('input, select').val(''); 
+
+            // Actualizar IDs y Nombres
+            new_row.find('input, select').each(function() {
+                var $input = $(this);
+                var old_id = $input.attr('id');
+                var old_name = $input.attr('name');
+                
+                // Actualizar ID (usamos la lógica simple que ya tenías para evitar romper el horario)
+                if (old_id) {
+                    var new_id = old_id.replace(/_\d+$/, '_' + counter);
+                    $input.attr('id', new_id);
+                }
+                
+                // CRÍTICO: Si es un array indexado (Reglas de Descuento), actualizamos el nombre
+                if (old_name && isArrayIndexed) {
+                   
+                    var new_name = old_name.replace(/\[\d+\]/g, '[' + counter + ']');
+                    $input.attr('name', new_name);
+                }
+                
+               
+            });
+            
+            // Agregar antes del botón
+            $(this).before(new_row);
+            
+            counter++;
+            updateRemoveButtons(rowSelector);
         });
-        
-        // Agregar ANTES del botón
-        $(this).before(new_ticket);
-        
-        ticket_counter++;
-        update_ticket_buttons();
-        
-        console.log(' Ticket agregado. Total:', $('.ticket_product_row').length);
-    });
-    
-    // Botón ELIMINAR TIPO DE ENTRADA
-    $(document).on('click', '.ticket_product_row .remove_schedule_button', function(e) {
-        e.preventDefault();
-        console.log(' Intentando eliminar ticket');
-        
-        var total_tickets = $('.ticket_product_row').length;
-        
-        if (total_tickets > 1) {
-            $(this).closest('.ticket_product_row').remove();
-            update_ticket_buttons();
-            console.log(' Ticket eliminado. Restantes:', $('.ticket_product_row').length);
-        } else {
-            alert(' Debe haber al menos un tipo de entrada.');
-            console.log(' No se puede eliminar el último ticket');
-        }
-    });
-    
-    // Función para mostrar/ocultar botones de eliminar
-    function update_ticket_buttons() {
-        var $tickets = $('.ticket_product_row');
-        var total = $tickets.length;
-        
-        $tickets.each(function(index) {
-            var $button = $(this).find('.remove_schedule_button');
+
+        // --- Lógica de Eliminar Fila ---
+        $(document).on('click', rowSelector + ' ' + REMOVE_BUTTON_SELECTOR, function(e) {
+            e.preventDefault();
             
-            if (total === 1) {
-                $button.hide();
+            if ($(rowSelector).length > 1) {
+                $(this).closest(rowSelector).remove();
+                
+                setTimeout(function() { updateRemoveButtons(rowSelector); }, 10);
             } else {
-                $button.show();
+                alert('Debe haber al menos una fila.');
             }
         });
         
-        console.log(' Botones actualizados. Total tickets:', total);
+        // Función para mostrar/ocultar botones de eliminar
+        function updateRemoveButtons(selector) {
+            var $rows = $(selector);
+            var total = $rows.length;
+            
+            $rows.each(function(index) {
+                var $button = $(this).find(REMOVE_BUTTON_SELECTOR);
+                
+                if (total === 1) {
+                    $button.hide();
+                } else {
+                    $button.show();
+                }
+            });
+        }
+        
+        // Inicializar estado de botones al cargar
+        updateRemoveButtons(rowSelector);
     }
     
-    // Inicializar estado de botones al cargar
-    update_ticket_buttons();
+    // 1. Inicializar Tipos de Entrada (USA la lógica original)
+    initializeRepeater(TICKET_TYPE_ROW_SELECTOR, ADD_TICKET_TYPE_BUTTON, false); 
+
+    // 2. Inicializar Reglas de Descuento (USA la lógica de arrays indexados)
+    initializeRepeater(DISCOUNT_RULE_ROW_SELECTOR, ADD_DISCOUNT_RULE_BUTTON, true); 
 });
+

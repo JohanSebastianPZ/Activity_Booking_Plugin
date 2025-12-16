@@ -466,56 +466,6 @@ class ActivityBooking
         }
     }
 
-	/*public function set_custom_cart_item_price($cart)
-	{
-		if (is_admin() && !defined('DOING_AJAX')) {
-			return;
-		}
-
-		if (did_action('woocommerce_before_calculate_totals') >= 2) {
-			return;
-		}
-
-		foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
-			if (isset($cart_item['booking_total_price'])) {
-				$precio_total_reserva = (float) $cart_item['booking_total_price'];
-                $product_id = $cart_item['product_id'];
-                
-                // 1. Recuperar la Regla Guardada
-                $n_minima = intval(get_post_meta($product_id, 'cantidad_minima_descuento', true));
-                $p_descuento = floatval(get_post_meta($product_id, 'precio_descuento_volumen', true));
-                
-                // 2. Obtener la Cantidad de Entradas Vendidas
-                // Nota: Usted guarda cada reserva como una unidad (cantidad 1) en el carrito
-                // Los tickets reales están en $cart_item['booking_tickets']. Necesitamos la suma.
-                $cantidad_entradas_reales = 0;
-                if (isset($cart_item['booking_tickets']) && is_array($cart_item['booking_tickets'])) {
-                    foreach ($cart_item['booking_tickets'] as $quantity) {
-                        $cantidad_entradas_reales += (int) $quantity;
-                    }
-                }
-                
-                // 3. Aplicar Lógica de Descuento Global (Solo si la regla existe)
-                if ($n_minima > 0 && $p_descuento > 0 && $cantidad_entradas_reales >= $n_minima) {
-                    
-                    // El precio de descuento (P) que guarda el colaborador NO incluye los 0.50€ de gestión.
-                    // Ajustamos el precio de descuento para incluir la tarifa de gestión:
-                    $precio_unitario_con_gestion = $p_descuento + 0.50; 
-                    
-                    // Calculamos el nuevo precio total de la reserva (Todas las entradas a precio P + Gestión)
-                    $nuevo_precio_total = $cantidad_entradas_reales * $precio_unitario_con_gestion;
-                    
-                    // Aplicar el nuevo precio total
-                    $cart_item['data']->set_price( $nuevo_precio_total );
-                    
-                } else {
-                    // Si no aplica el descuento por volumen, aplicamos el precio original calculado en add_booking_to_cart
-                    $cart_item['data']->set_price($precio_total_reserva);
-                }
-			}
-		}
-	}*/
-
 	private function get_regular_price_for_ticket_type($product_id, $ticket_type_name) {
         
         $ticket_types_json = get_post_meta($product_id, '_activity_ticket_types', true);
@@ -797,7 +747,7 @@ class ActivityBooking
         }
 
         // Botón para añadir entrada (Necesitará su propio JS de repetición)
-        echo "<button type='button' class='add_ticket_button'>Agregar Tipo de Entrada</button>";
+        echo "<button type='button' class='add_ticket_type_button'>Agregar Tipo de Entrada</button>";
         echo '</div>'; // Cierre del div de margen
 		
 
@@ -901,35 +851,8 @@ class ActivityBooking
         }
 
         // Botón para añadir una nueva regla
-        echo "<button type='button' class='add_ticket_button add_discount_rule'>Agregar Regla de Descuento</button>";
+        echo "<button type='button' class='add_discount_rule_button'>Agregar Regla de Descuento</button>";
         echo '</div>';
-
-
-
-		/*echo '<div>';
-
-			woocommerce_wp_text_input(array(
-				'id' => 'cantidad_minima_descuento',
-				'name' => 'cantidad_minima_descuento',
-				'label' => __('Cantidad Mínima para Descuento', 'text-domain'),
-				'value' => get_post_meta($post->ID, 'cantidad_minima_descuento',true),
-				'type' => 'number',
-				'placeholder' => 'Ej: 4',
-				'class' => 'short wc_input_price',
-				'custom_attributes' => array('step' => '1','min'  => '2')
-			));
-
-			woocommerce_wp_text_input(array(
-				'id'          => 'precio_descuento_volumen',
-				'name'        => 'precio_descuento_volumen',
-				'label'       => __('Precio Unitario de Descuento', 'text-domain'),
-				'value'       => get_post_meta($post->ID, 'precio_descuento_volumen', true), 
-				'placeholder' => 'Ej: 60.00',
-				'class'       => 'short wc_input_price',
-				'custom_attributes' => array('step' => 'any','min'  => '0')
-			));
-
-		echo '</div>'*/
 		?>
 
 
@@ -1105,23 +1028,27 @@ class ActivityBooking
 
 	// Dentro de la clase ActivityBooking, añade este nuevo método:
 	public function enqueue_admin_scripts($hook) {
-		global $post;
+        
+        // Verifica si estamos en la página de edición de un post existente ('post.php') 
+        if ( 'post.php' === $hook || 'post-new.php' === $hook ) {
 
-		// Condición para cargar el script solo en la pantalla de edición de productos
-		if (!in_array($hook, array('post.php', 'post-new.php')) || ($post && 'product' != $post->post_type)) {
-			return;
-		}
-
-		// Encolar el script (AJUSTA LA RUTA SI ES NECESARIO)
-		// Asumimos que tu archivo está en: [ruta-del-plugin]/assets/js/admin-repeater.js
-		wp_enqueue_script(
-			'booking-admin-repeater-js',
-			plugin_dir_url(__FILE__) . 'assets/js/admin-repeater.js', // <-- RUTA CRÍTICA
-			array('jquery'),
-			'1.0', // Versión
-			true   // Cargar en el footer
-		);
-	}
+            global $post;
+            
+            // Verifica que el tipo de post sea 'product' (es decir, la edición de un producto de WooCommerce)
+            if ( $post && 'product' === $post->post_type ) {
+                
+                // Encolar el script (Ruta verificada)
+                wp_enqueue_script(
+                    'booking-admin-repeater-js',
+                    plugin_dir_url(__FILE__) . 'assets/js/admin-repeater.js', 
+                    array('jquery'),
+                    // Usamos la versión de tiempo actual para forzar la recarga en el navegador (útil para el debugging)
+                    time(), 
+                    true
+                );
+            }
+        }
+    }
 
 	public function save_activity_schedules($post_id)
 	{
@@ -1474,72 +1401,6 @@ class ActivityBooking
             wp_send_json_error(array('message' => 'Error al añadir al carrito'));
         }
     }
-
-	/*public function add_booking_to_cart()
-	{
-		check_ajax_referer('booking_nonce', 'nonce');
-
-		$product_id = intval($_POST['product_id']);
-		$schedule_id = sanitize_text_field($_POST['schedule_id']);
-		$tickets = isset($_POST['tickets']) ? $_POST['tickets'] : array();
-
-		if (empty($product_id) || empty($schedule_id)) {
-			wp_send_json_error(array('message' => 'Datos incompletos'));
-		}
-
-		// Verificar si hay al menos un ticket con cantidad mayor a 0
-		$has_tickets = false;
-		$total_price = 0;
-		$total_quantity = 0;
-
-		// Obtener información de tipos de entrada del producto
-		$product = wc_get_product($product_id);
-		$ticket_types_json = $product->get_meta('_activity_ticket_types');
-		$ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
-
-		// Calcular precio total y cantidad total
-		foreach ($tickets as $ticket_id => $quantity) {
-			$quantity = intval($quantity);
-			if ($quantity > 0) {
-				$has_tickets = true;
-				$total_quantity += $quantity;
-
-				// Buscar el precio del tipo de entrada
-				foreach ($ticket_types as $ticket_type) {
-					if ($ticket_type['id'] == $ticket_id) {
-						$ticket_price = floatval($ticket_type['price']);
-						$total_price += ($ticket_price * $quantity);
-						break;
-					}
-				}
-			}
-		}
-
-		// Aqui se agrega el 0.50 al precio del producto, por gestion
-		$management_fee = 0.50;
-		$total_price += $management_fee;
-
-		if (!$has_tickets) {
-			wp_send_json_error(array('message' => 'Debe seleccionar al menos una entrada'));
-		}
-
-		// Preparar datos del carrito con precio personalizado
-		$cart_item_data = array(
-			'booking_schedule' => $schedule_id,
-			'booking_tickets' => $tickets,
-			'booking_total_price' => $total_price,
-			'unique_key' => md5(microtime() . rand())
-		);
-
-		// Añadir al carrito con cantidad 1 pero precio personalizado
-		$added = WC()->cart->add_to_cart($product_id, 1, 0, array(), $cart_item_data);
-
-		if ($added) {
-			wp_send_json_success(array('message' => 'Producto añadido al carrito'));
-		} else {
-			wp_send_json_error(array('message' => 'Error al añadir al carrito'));
-		}
-	}*/
 
 	public function display_booking_data_cart($name, $cart_item, $cart_item_key)
 	{
