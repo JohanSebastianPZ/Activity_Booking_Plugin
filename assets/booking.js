@@ -1,24 +1,16 @@
 jQuery(document).ready(function($) {
+    // Deshabilitar botón de compra al inicio
     $('#confirm-booking').prop('disabled', true);
 
-    // Abrir modal con animación
+    // --- EVENTOS DE INTERFAZ ---
+    
     $('#open-booking-modal').on('click', function() {
         $('#booking-modal').show().addClass('show');
         $('body').addClass('modal-open');
     });
     
-    // Cerrar modal
     $('.close-modal, .booking-modal').on('click', function(e) {
-        if (e.target === this) {
-            closeModal();
-        }
-    });
-    
-    // Cerrar con ESC
-    $(document).on('keydown', function(e) {
-        if (e.key === 'Escape' && $('#booking-modal').hasClass('show')) {
-            closeModal();
-        }
+        if (e.target === this) closeModal();
     });
     
     function closeModal() {
@@ -28,13 +20,16 @@ jQuery(document).ready(function($) {
             $('body').removeClass('modal-open');
         }, 300);
     }
-    
-    // Lógica de cantidad mejorada
+
+    // --- LÓGICA DE CANTIDADES ---
+
     $('.quantity-btn').on('click', function() {
         var $btn = $(this);
         var ticketId = $btn.data('ticket');
-        var $quantityInput = $('[name="ticket_quantity[' + ticketId + ']"]');
-        var $display = $btn.closest('.quantity-selector').find('.quantity-display');
+        var $row = $btn.closest('.ticket-row');
+        var $quantityInput = $row.find('.ticket-quantity');
+        var $display = $row.find('.quantity-display');
+        
         var currentQty = parseInt($quantityInput.val()) || 0;
         
         if ($btn.hasClass('plus')) {
@@ -46,46 +41,70 @@ jQuery(document).ready(function($) {
         $quantityInput.val(currentQty);
         $display.text(currentQty);
         
-        // Añadir efecto visual
+        // Efecto visual de actualización
         $display.addClass('quantity-updated');
-        setTimeout(function() {
-            $display.removeClass('quantity-updated');
-        }, 200);
+        setTimeout(function() { $display.removeClass('quantity-updated'); }, 200);
         
+        // Recalcular todo
         updatePrices();
         updateConfirmButton();
     });
-    
+
+    // --- FUNCIÓN CÁLCULO DE PRECIOS Y DESCUENTOS ---
+
     function updatePrices() {
-        var subtotal = 0;
+        var subtotalOriginal = 0; 
+        var subtotalConDescuento = 0; 
         var totalTickets = 0;
         
-        $('.ticket-quantity').each(function() {
-            var quantity = parseInt($(this).val()) || 0;
-            if (quantity > 0) {
-                var ticketId = $(this).attr('name').match(/\[(.*?)\]/)[1];
-                var price = parseFloat($('.ticket-row').find('[data-ticket="' + ticketId + '"]').closest('.ticket-row').find('.price').data('price'));
-                subtotal += (price * quantity);
-                totalTickets += quantity;
+        var reglas = window.REGLAS_DESCUENTO || [];
+        
+        $('.ticket-row').each(function() {
+            var $fila = $(this);
+            var cantidad = parseInt($fila.find('.ticket-quantity').val()) || 0;
+            
+            if (cantidad > 0) {
+                
+                var idTicket = $fila.find('.quantity-btn.plus').attr('data-ticket'); 
+                var precioBase = parseFloat($fila.find('.price').data('price'));
+                var precioUnitarioFinal = precioBase;
+
+                
+                reglas.forEach(function(r) {
+                    if (String(r.type).trim().toLowerCase() === String(idTicket).trim().toLowerCase()) {
+                        if (cantidad >= parseInt(r.min_qty)) {
+                            precioUnitarioFinal = parseFloat(r.discount_price);
+                        }
+                    }
+                });
+
+                subtotalOriginal += (precioBase * cantidad);
+                subtotalConDescuento += (precioUnitarioFinal * cantidad);
+                totalTickets += cantidad;
             }
         });
-        
-        var managementFee = 0.50; // 0.50€ por entrada
-        var total = subtotal + managementFee;
-        
-        $('#subtotal').text(subtotal.toFixed(2) + '€');
-        $('#management-fee').text(managementFee.toFixed(2) + '€');
-        $('#total-price strong').text(total.toFixed(2) + '€');
-        $('.btn-price').text(total.toFixed(2) + '€');
-        
-        // Mostrar/ocultar resumen
-        if (total > 0) {
-            $('.booking-summary').show();
+
+        var gestion = totalTickets > 0 ? 0.50 : 0.00;
+        var ahorro = subtotalOriginal - subtotalConDescuento;
+        var totalFinal = subtotalConDescuento + gestion;
+
+        // ACTUALIZAR INTERFAZ
+        // Mostramos el precio ya rebajado en el subtotal para que el usuario no se confunda
+        $('#subtotal').text(subtotalConDescuento.toFixed(2) + '€');
+        $('#management-fee').text(gestion.toFixed(2) + '€');
+        $('#total-price strong').text(totalFinal.toFixed(2) + '€');
+
+        // FILA DE DESCUENTO (Opcional, para mostrar cuánto se ahorró)
+        if (ahorro > 0) {
+            $('#discount-amount').text('-' + ahorro.toFixed(2) + '€');
+            $('.discount-row').show();
         } else {
-            $('.booking-summary').hide();
+            $('.discount-row').hide();
         }
+
+        $('.booking-summary').toggle(totalTickets > 0);
     }
-    
+
     function updateConfirmButton() {
         var hasTickets = false;
         $('.ticket-quantity').each(function() {
@@ -94,45 +113,24 @@ jQuery(document).ready(function($) {
                 return false;
             }
         });
-        
         $('#confirm-booking').prop('disabled', !hasTickets);
     }
-    
-    // Inicializar precios
-    updatePrices();
-    
-    // Confirmar reserva (resto del código igual)
+
+    // --- ENVÍO AL CARRITO (AJAX) ---
+
     $(document).on('click', '#confirm-booking', function() {
         var schedule = $('input[name="booking_schedule"]:checked').val();
         var tickets = {};
-        var hasTickets = false;
         var productId = $('#current-product-id').val();
         
         $('.ticket-quantity').each(function() {
             var ticketId = $(this).attr('name').match(/\[(.*?)\]/)[1];
             var quantity = parseInt($(this).val()) || 0;
-            tickets[ticketId] = quantity;
-            if (quantity > 0) {
-                hasTickets = true;
-            }
+            if (quantity > 0) tickets[ticketId] = quantity;
         });
-        
-        if (!productId) {
-            alert('Error: ID de producto no encontrado');
-            return;
-        }
-        
-        if (!schedule) {
-            alert('Por favor selecciona una fecha preferida');
-            return;
-        }
-        
-        if (!hasTickets) {
-            alert('Por favor selecciona al menos una entrada');
-            return;
-        }
-        
-        // Enviar AJAX
+
+        if (!schedule) { alert('Selecciona una fecha'); return; }
+
         $.ajax({
             url: booking_ajax.ajax_url,
             type: 'POST',
@@ -144,16 +142,8 @@ jQuery(document).ready(function($) {
                 tickets: tickets
             },
             success: function(response) {
-                if (response.success) {
-                    $('#booking-modal').fadeOut();
-                    window.location.href = booking_ajax.cart_url;
-                } else {
-                    alert('Error: ' + response.data.message);
-                }
-            },
-            error: function(xhr, status, error) {
-                console.log('AJAX Error:', xhr.responseText);
-                alert('Error de conexión: ' + error);
+                if (response.success) window.location.href = booking_ajax.cart_url;
+                else alert('Error: ' + response.data.message);
             }
         });
     });

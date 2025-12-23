@@ -1159,49 +1159,61 @@ class ActivityBooking
 			return;
 		}
 
-// Obtener el array de reglas enviado por POST
-    $discount_rules = isset($_POST['_activity_discount_rules']) ? $_POST['_activity_discount_rules'] : array();
-    
-    $clean_rules = array();
+		// Obtener el array de reglas enviado por POST
+		$discount_rules = isset($_POST['_activity_discount_rules']) ? $_POST['_activity_discount_rules'] : array();
+		
+		$clean_rules = array();
 
-    if (!empty($discount_rules) && is_array($discount_rules)) {
-        foreach ($discount_rules as $rule) {
-            // Se asume que $rule es un array con 'type', 'min_qty', y 'discount_price'
-            
-            $type           = isset($rule['type']) ? sanitize_text_field($rule['type']) : '';
-            $min_qty        = isset($rule['min_qty']) ? floatval($rule['min_qty']) : 0; // Usar floatval o intval
-            $discount_price = isset($rule['discount_price']) ? floatval($rule['discount_price']) : 0.00; // Usar floatval para precios
-            
-            // Opcional: Solo guardar la regla si tiene un tipo y una cantidad mínima válida
-            if (!empty($type) && $min_qty > 0) {
-                $clean_rules[] = array(
-                    'type'           => $type,
-                    'min_qty'        => $min_qty,
-                    'discount_price' => $discount_price,
-                );
-            }
-        }
-    }
+		if (!empty($discount_rules) && is_array($discount_rules)) {
+			foreach ($discount_rules as $rule) {
+				// Se asume que $rule es un array con 'type', 'min_qty', y 'discount_price'
+				
+				$type           = isset($rule['type']) ? sanitize_text_field($rule['type']) : '';
+				$min_qty        = isset($rule['min_qty']) ? floatval($rule['min_qty']) : 0; // Usar floatval o intval
+				$discount_price = isset($rule['discount_price']) ? floatval($rule['discount_price']) : 0.00; // Usar floatval para precios
+				
+				// Opcional: Solo guardar la regla si tiene un tipo y una cantidad mínima válida
+				if (!empty($type) && $min_qty > 0) {
+					$clean_rules[] = array(
+						'type'           => $type,
+						'min_qty'        => $min_qty,
+						'discount_price' => $discount_price,
+					);
+				}
+			}
+		}
 
-    // Guardar el array limpio de reglas en un solo metadato
-	$rules_json = json_encode($clean_rules);
-    update_post_meta($post_id, '_activity_discount_rules', $rules_json);
+		// Guardar el array limpio de reglas en un solo metadato
+		$rules_json = json_encode($clean_rules);
+		update_post_meta($post_id, '_activity_discount_rules', $rules_json);
 	}
 
 	public function enqueue_scripts()
-	{
-		if (is_product()) {
-			wp_enqueue_script('activity-booking-js', plugin_dir_url(__FILE__) . 'assets/booking.js', array('jquery'), '1.0', true);
-			wp_enqueue_style('activity-booking-css', plugin_dir_url(__FILE__) . 'assets/booking.css', array(), '1.0');
+    {
+        if (is_product()) {
+            global $product; // 1. Obtenemos el objeto del producto actual
+            
+            // 2. Recuperamos las reglas de descuento guardadas en los metadatos
+            $discount_rules_json = $product->get_meta('_activity_discount_rules');
+            $discount_rules = $discount_rules_json ? json_decode($discount_rules_json, true) : array();
+            
+            // 3. Encolamos el script y el estilo
+            // Usamos time() como versión para asegurar que los cambios se vean al instante sin caché
+            wp_enqueue_script('activity-booking-js', plugin_dir_url(__FILE__) . 'assets/booking.js', array('jquery'), time(), true);
+            wp_enqueue_style('activity-booking-css', plugin_dir_url(__FILE__) . 'assets/booking.css', array(), '1.0');
 
-			wp_localize_script('activity-booking-js', 'booking_ajax', array(
-				'ajax_url' => admin_url('admin-ajax.php'),
-				'nonce' => wp_create_nonce('booking_nonce'),
-				'cart_url' => wc_get_cart_url(), // Añadir la URL del carrito
-				'checkout_url' => wc_get_checkout_url() // Opcional: URL del checkout
-			));
-		}
-	}
+            // 4. Pasamos los datos de AJAX necesarios
+            wp_localize_script('activity-booking-js', 'booking_ajax', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('booking_nonce'),
+                'cart_url' => wc_get_cart_url(),
+                'checkout_url' => wc_get_checkout_url()
+            ));
+
+            // 5. Pasamos las reglas de descuento al JavaScript
+            wp_localize_script('activity-booking-js', 'DISCOUNT_RULES', $discount_rules); 
+        }
+    }
 
 	public function add_booking_button()
 	{
@@ -1218,113 +1230,127 @@ class ActivityBooking
 	}
 
 	public function booking_modal_html()
-	{
-		if (!is_product())
-			return;
+    {
+        if (!is_product())
+            return;
 
-		global $product;
-		if (!$product || $product->get_meta('_is_activity') !== 'yes')
-			return;
+        global $product;
+        if (!$product || $product->get_meta('_is_activity') !== 'yes')
+            return;
 
-		// Obtener y decodificar horarios y tipos de entrada
-		$ticket_types_json = $product->get_meta('_activity_ticket_types');
-		$ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
-		$schedules = $product->get_meta('_activity_schedules_data');
+        // 1. Obtener datos y reglas de descuento
+        $ticket_types_json = $product->get_meta('_activity_ticket_types');
+        $ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
+        $schedules = $product->get_meta('_activity_schedules_data');
+        
+        // Obtenemos las reglas para poder usarlas si fuera necesario en el HTML
+        $discount_rules_json = $product->get_meta('_activity_discount_rules');
+        $discount_rules = $discount_rules_json ? json_decode($discount_rules_json, true) : array();
 
-		if (empty($schedules) || !is_array($schedules)) {
-			$schedules = array(
-				array('id' => '1', 'day' => 'Sábado', 'start_time' => '17:00', 'end_time' => '19:00'),
-				array('id' => '2', 'day' => 'Domingo', 'start_time' => '10:00', 'end_time' => '12:00')
-			);
-		}
+        if (empty($schedules) || !is_array($schedules)) {
+            $schedules = array(
+                array('id' => '1', 'day' => 'Sábado', 'start_time' => '17:00', 'end_time' => '19:00'),
+                array('id' => '2', 'day' => 'Domingo', 'start_time' => '10:00', 'end_time' => '12:00')
+            );
+        }
 
-		if (empty($ticket_types)) {
-			$ticket_types = array(
-				array('id' => 'adult', 'name' => 'Adulto', 'price' => '20')
-			);
-		}
+        if (empty($ticket_types)) {
+            $ticket_types = array(
+                array('id' => 'adult', 'name' => 'Adulto', 'price' => '20')
+            );
+        }
 
-		?>
-		<div id="booking-modal" class="booking-modal" style="display: none;">
-			<div class="booking-modal-content">
-				<div class="booking-header">
-					<h3>Compra tu entrada</h3>
-					<span class="close-modal">&times;</span>
-				</div>
+        ?>
+        <div id="booking-modal" class="booking-modal" style="display: none;">
+            <div class="booking-modal-content">
+                <div class="booking-header">
+                    <h3>Compra tu entrada</h3>
+                    <span class="close-modal">&times;</span>
+                </div>
 
-				<div class="booking-body">
-					<div class="schedule-selection">
-						<div class="schedule-info">
-							<h4 class="schedule-title">Selecciona tu fecha preferida:</h4>
-							<div class="schedule-times">
-								<?php foreach ($schedules as $schedule): ?>
-									<label>
-										<input type="radio" name="booking_schedule" value="<?php echo esc_attr($schedule['id']); ?>" required>
-										<strong> <?php echo esc_html($schedule['day']) . ' de ' . esc_html($schedule['start_time']) . ' a ' . esc_html($schedule['end_time']); ?></strong>
-									</label>
-								<?php endforeach; ?>
-							</div>
-							<div class="schedule-note">
-								<small><em>La fecha final será acordada directamente con nuestro colaborador.</em></small>
-							</div>
-							<div class="validity-date">
-								Válido hasta 31-01-2026
-							</div>
+                <div class="booking-body">
+                    <div class="schedule-selection">
+                        <div class="schedule-info">
+                            <h4 class="schedule-title">Selecciona tu fecha preferida:</h4>
+                            <div class="schedule-times">
+                                <?php foreach ($schedules as $schedule): ?>
+                                    <label>
+                                        <input type="radio" name="booking_schedule" value="<?php echo esc_attr($schedule['id']); ?>" required>
+                                        <strong> <?php echo esc_html($schedule['day']) . ' de ' . esc_html($schedule['start_time']) . ' a ' . esc_html($schedule['end_time']); ?></strong>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="experience-title">
+                        <h4><?php echo $product->get_name(); ?></h4>
+                    </div>
+
+                    <div class="ticket-selection">
+                        <?php foreach ($ticket_types as $ticket): ?>
+                            <div class="ticket-row">
+                                <div class="ticket-info">
+                                    <span class="ticket-type"><?php echo esc_html($ticket['name']); ?></span>
+                                    <div class="ticket-price">
+                                        <span class="price" data-price="<?php echo esc_attr($ticket['price']); ?>"><?php echo esc_html($ticket['price']); ?>€</span>
+                                        <small>+0,50€ gastos gestión</small>
+                                    </div>
+                                </div>
+                                <div class="quantity-selector">
+                                    <span class="quantity-display">0</span>
+                                    <div class="quantity-controls">
+                                        <button type="button" class="quantity-btn plus" data-ticket="<?php echo esc_html($ticket['name']); ?>">+</button>
+                                        <button type="button" class="quantity-btn minus" data-ticket="<?php echo esc_html($ticket['name']); ?>">-</button>
+                                    </div>
+                                    <input type="hidden" name="ticket_quantity[<?php echo esc_attr($ticket['id']); ?>]" value="0" class="ticket-quantity">
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="booking-summary" style="display:none;">
+                        <div class="summary-row">
+                            <span>Subtotal:</span>
+                            <span id="subtotal">0€</span>
+                        </div>
+                        
+						<div class="summary-row discount-row" style="display:none; color: #27ae60; font-weight: bold;"> 
+							<span>¡Descuento por cantidad!:</span>
+							<span id="discount-amount">0€</span>
 						</div>
-					</div>
 
-					<div class="experience-title">
-						<h4><?php echo $product->get_name(); ?></h4>
-					</div>
+                        <div class="summary-row">
+                            <span>Gastos de gestión:</span>
+                            <span id="management-fee">0€</span>
+                        </div>
+                        <div class="summary-row total-row">
+                            <span><strong>Total:</strong></span>
+                            <span id="total-price"><strong>0€</strong></span>
+                        </div>
+                    </div>
 
-					<div class="ticket-selection">
-						<?php foreach ($ticket_types as $ticket): ?>
-							<div class="ticket-row">
-								<div class="ticket-info">
-									<span class="ticket-type"><?php echo esc_html($ticket['name']); ?></span>
-									<div class="ticket-price">
-										<span class="price" data-price="<?php echo esc_attr($ticket['price']); ?>"><?php echo esc_html($ticket['price']); ?>€</span>
-										<small>+0,50€ gastos gestión</small>
-									</div>
-								</div>
-								<div class="quantity-selector">
-									<span class="quantity-display">0</span>
-									<div class="quantity-controls">
-										<button type="button" class="quantity-btn plus" data-ticket="<?php echo esc_attr($ticket['id']); ?>">+</button>
-										<button type="button" class="quantity-btn minus" data-ticket="<?php echo esc_attr($ticket['id']); ?>">-</button>
-									</div>
-									<input type="hidden" name="ticket_quantity[<?php echo esc_attr($ticket['id']); ?>]" value="0" class="ticket-quantity">
-								</div>
-							</div>
-						<?php endforeach; ?>
-					</div>
+                    <button type="button" id="confirm-booking" class="booking-confirm-btn" disabled>
+                        <span class="btn-text">Comprar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 
-					<!-- Nuevo resumen de total -->
-					<div class="booking-summary">
-						<div class="summary-row">
-							<span>Subtotal:</span>
-							<span id="subtotal">0€</span>
-						</div>
-						<div class="summary-row">
-							<span>Gastos de gestión:</span>
-							<span id="management-fee">0€</span>
-						</div>
-						<div class="summary-row total-row">
-							<span><strong>Total:</strong></span>
-							<span id="total-price"><strong>0€</strong></span>
-						</div>
-					</div>
-
-					<button type="button" id="confirm-booking" class="booking-confirm-btn">
-						<span class="btn-text">Comprar</span>
-					</button>
-				</div>
-			</div>
-		</div>
-
-		<input type="hidden" id="current-product-id" value="<?php echo $product->get_id(); ?>">
 		<?php
-	}
+        // --- AQUÍ PEGAS EL CÓDIGO NUEVO ---
+        
+$reglas_crudo = $product->get_meta('_activity_discount_rules');
+        ?>
+        <script type="text/javascript">
+            // Forzamos la creación de la variable global
+            window.REGLAS_DESCUENTO = <?php echo $reglas_crudo ? $reglas_crudo : '[]'; ?>;
+            console.log("Reglas cargadas correctamente:", window.REGLAS_DESCUENTO);
+        </script>
+
+        <input type="hidden" id="current-product-id" value="<?php echo $product->get_id(); ?>">
+        <?php
+    }
 
 	public function add_booking_to_cart()
     {
