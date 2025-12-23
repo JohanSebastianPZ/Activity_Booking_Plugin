@@ -1177,7 +1177,7 @@ class ActivityBooking
 					$clean_rules[] = array(
 						'type'           => $type,
 						'min_qty'        => $min_qty,
-						'discount_price' => $discount_price,
+						'discount_price' => $discount_price, 
 					);
 				}
 			}
