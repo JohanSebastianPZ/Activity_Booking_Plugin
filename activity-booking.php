@@ -54,6 +54,72 @@ add_action('wp_enqueue_scripts', function () {
 	]);
 });
 
+	// Mostrar datos custom en la línea del carrito (horario / entradas)
+	add_filter('woocommerce_get_item_data', function($item_data, $cart_item) {
+		// Extraer detalles (soporta estructura anidada `booking_data.details` o la antigua `details`)
+		if (!empty($cart_item['booking_data']['details']) && is_array($cart_item['booking_data']['details'])) {
+			foreach ($cart_item['booking_data']['details'] as $detail) {
+				$item_data[] = array('key' => $detail['label'], 'value' => 'Cantidad: ' . $detail['quantity']);
+			}
+		} elseif (!empty($cart_item['details']) && is_array($cart_item['details'])) {
+			foreach ($cart_item['details'] as $detail) {
+				$item_data[] = array('key' => $detail['label'], 'value' => 'Cantidad: ' . $detail['quantity']);
+			}
+		}
+
+		// Si ya tenemos una etiqueta legible enviada/guardada, usarla y salir
+		if (!empty($cart_item['booking_data']['schedule_label'])) {
+			$item_data[] = array('key' => 'Horario', 'value' => $cart_item['booking_data']['schedule_label']);
+			return $item_data;
+		}
+
+		// Intentar resolver un schedule_id mínimo (sin múltiples fallbacks complicados)
+		$schedule_id = $cart_item['booking_data']['schedule_id'] ?? $cart_item['booking_schedule'] ?? null;
+		if ($schedule_id) {
+			$product_id = $cart_item['product_id'] ?? 0;
+			if (empty($product_id) && !empty($cart_item['data']) && is_object($cart_item['data']) && method_exists($cart_item['data'], 'get_id')) {
+				$product_id = $cart_item['data']->get_id();
+			}
+
+			$label = (string) $schedule_id;
+
+			if ($product_id) {
+				$meta = get_post_meta($product_id, '_activity_schedules_data', true);
+				$schedules = [];
+				if (is_string($meta)) {
+					$schedules = json_decode($meta, true) ?: [];
+				} elseif (is_array($meta)) {
+					$schedules = $meta;
+				}
+
+				if (!empty($schedules)) {
+					foreach ($schedules as $schedule) {
+						if (isset($schedule['id']) && (string)$schedule['id'] === (string)$schedule_id) {
+							if (!empty($schedule['start_time']) && !empty($schedule['end_time'])) {
+								$label = $schedule['day'] . ' de ' . $schedule['start_time'] . ' a ' . $schedule['end_time'];
+							} elseif (!empty($schedule['time'])) {
+								$label = $schedule['day'] . ' a las ' . $schedule['time'];
+							} elseif (!empty($schedule['start'])) {
+								$label = $schedule['day'] . ' de ' . $schedule['start'];
+							} elseif (is_string($schedule)) {
+								$label = $schedule;
+							} else {
+								$label = $schedule['day'] ?? $label;
+							}
+							break;
+						}
+					}
+				}
+			}
+
+			$item_data[] = array('key' => 'Horario', 'value' => $label);
+		}
+
+		return $item_data;
+	}, 10, 2);
+
+
+
 // Iniciar plugin principal
 class ActivityBooking
 {
@@ -414,15 +480,16 @@ class ActivityBooking
                 // 3. Aplicar Lógica de Descuento Global (Solo si la regla existe)
                 if ($n_minima > 0 && $p_descuento > 0 && $cantidad_entradas_reales >= $n_minima) {
                     
-                    // El precio de descuento (P) que guarda el colaborador NO incluye los 0.50€ de gestión.
-                    // Ajustamos el precio de descuento para incluir la tarifa de gestión:
-                    $precio_unitario_con_gestion = $p_descuento + 0.50; 
-                    
-                    // Calculamos el nuevo precio total de la reserva (Todas las entradas a precio P + Gestión)
-                    $nuevo_precio_total = $cantidad_entradas_reales * $precio_unitario_con_gestion;
-                    
-                    // Aplicar el nuevo precio total
-                    $cart_item['data']->set_price( $nuevo_precio_total );
+					// El precio de descuento (P) que guarda el colaborador NO incluye los 0.50€ de gestión.
+					// Como la tarifa es por reserva, la sumamos una sola vez al total.
+					$management_fee = 0.50;
+					$precio_unitario_descuento = $p_descuento;
+
+					// Calculamos el nuevo precio total de la reserva (Todas las entradas a precio P) + Gestión (una vez)
+					$nuevo_precio_total = ($cantidad_entradas_reales * $precio_unitario_descuento) + $management_fee;
+
+					// Aplicar el nuevo precio total (el item en el carrito está como cantidad 1, por tanto seteamos el precio total aquí)
+					$cart_item['data']->set_price( (float) $nuevo_precio_total );
                     
                 } else {
                     // Si no aplica el descuento por volumen, aplicamos el precio original calculado en add_booking_to_cart
@@ -1192,6 +1259,7 @@ class ActivityBooking
 		$ticket_types = $ticket_types_json ? json_decode($ticket_types_json, true) : array();
 
 		// Calcular precio total y cantidad total
+		$booking_details = array();
 		foreach ($tickets as $ticket_id => $quantity) {
 			$quantity = intval($quantity);
 			if ($quantity > 0) {
@@ -1200,8 +1268,16 @@ class ActivityBooking
 
 				// Buscar el precio del tipo de entrada
 				foreach ($ticket_types as $ticket_type) {
-					if ($ticket_type['id'] == $ticket_id) {
+					if ((string)$ticket_type['id'] === (string)$ticket_id) {
 						$ticket_price = floatval($ticket_type['price']);
+
+						// Guardamos el desglose para mostrarlo luego
+						$booking_details[] = array(
+							'label'    => $ticket_type['name'],
+							'quantity' => $quantity,
+							'price'    => $ticket_price
+						);
+
 						$total_price += ($ticket_price * $quantity);
 						break;
 					}
@@ -1217,9 +1293,21 @@ class ActivityBooking
 			wp_send_json_error(array('message' => 'Debe seleccionar al menos una entrada'));
 		}
 
-		// Preparar datos del carrito con precio personalizado
+		// Obtener label opcional enviado desde el frontend
+		$schedule_label = isset($_POST['schedule_label']) ? sanitize_text_field($_POST['schedule_label']) : '';
+
+		// Si no lo envía el frontend, resolverlo en el servidor para garantizar el label
+		if (empty($schedule_label)) {
+			$schedule_label = $this->get_schedule_info($schedule_id, $product_id);
+		}
+
+		// Preparar datos del carrito con precio personalizado y detalles anidados
 		$cart_item_data = array(
-			'booking_schedule' => $schedule_id,
+			'booking_data' => array(
+				'schedule_id' => $schedule_id,
+				'schedule_label' => $schedule_label,
+				'details' => $booking_details
+			),
 			'booking_tickets' => $tickets,
 			'booking_total_price' => $total_price,
 			'unique_key' => md5(microtime() . rand())
@@ -1241,7 +1329,7 @@ class ActivityBooking
 			$schedule_info = $this->get_schedule_info($cart_item['booking_schedule'], $cart_item['product_id']);
 			$name .= '<br><small><strong>Horario:</strong> ' . $schedule_info . '</small>';
 
-			$name .= '<br><small><strong>Entradas:</strong></small>';
+			$name .= '<br><small><strong>Entrada:</strong></small>';
 			foreach ($cart_item['booking_tickets'] as $ticket_id => $quantity) {
 				if ($quantity > 0) {
 					$ticket_info = $this->get_ticket_info($ticket_id, $cart_item['product_id']);
@@ -1255,7 +1343,11 @@ class ActivityBooking
 
 	public function save_booking_data_order($item, $cart_item_key, $values, $order)
 	{
-		if (isset($values['booking_schedule'])) {
+		// Compatibilidad: los datos de horario ahora vienen anidados en 'booking_data'
+		if (!empty($values['booking_data']['schedule_label'])) {
+			$item->add_meta_data('Horario', sanitize_text_field($values['booking_data']['schedule_label']));
+		} elseif (isset($values['booking_schedule'])) {
+			// Fallback por compatibilidad con versiones antiguas
 			$item->add_meta_data('Horario', $this->get_schedule_info($values['booking_schedule'], $values['product_id']));
 		}
 
@@ -1273,15 +1365,55 @@ class ActivityBooking
 	private function get_schedule_info($schedule_id, $product_id)
 	{
 		$product = wc_get_product($product_id);
-		$schedules = $product->get_meta('_activity_schedules_data');
+		$schedules = array();
+		if ($product) {
+			$schedules = $product->get_meta('_activity_schedules_data');
+		}
+
+		if (empty($schedules)) {
+			$meta = get_post_meta($product_id, '_activity_schedules_data', true);
+			if (!empty($meta)) {
+				if (is_string($meta)) {
+					$decoded = json_decode($meta, true);
+					$schedules = $decoded ? $decoded : $meta;
+				} else {
+					$schedules = $meta;
+				}
+			}
+		}
+
+		if (empty($schedules)) {
+			$meta2 = get_post_meta($product_id, '_activity_schedules', true);
+			if (!empty($meta2)) {
+				if (is_string($meta2)) {
+					$decoded2 = json_decode($meta2, true);
+					$schedules = $decoded2 ? $decoded2 : $meta2;
+				} else {
+					$schedules = $meta2;
+				}
+			}
+		}
 
 		if (empty($schedules) || !is_array($schedules)) {
 			return 'Horario no encontrado';
 		}
 
 		foreach ($schedules as $schedule) {
-			if (isset($schedule['id']) && $schedule['id'] == $schedule_id) {
-				return $schedule['day'] . ' de ' . $schedule['start_time'] . ' a ' . $schedule['end_time'];
+			if (isset($schedule['id']) && (string)$schedule['id'] == (string)$schedule_id) {
+				// Diferentes formatos posibles de horario
+				if (isset($schedule['start_time']) && isset($schedule['end_time'])) {
+					return $schedule['day'] . ' de ' . $schedule['start_time'] . ' a ' . $schedule['end_time'];
+				}
+				if (isset($schedule['time'])) {
+					return $schedule['day'] . ' a las ' . $schedule['time'];
+				}
+				if (isset($schedule['start'])) {
+					return $schedule['day'] . ' de ' . $schedule['start'];
+				}
+				// Si el schedule es un string simple
+				if (is_string($schedule)) {
+					return $schedule;
+				}
 			}
 		}
 

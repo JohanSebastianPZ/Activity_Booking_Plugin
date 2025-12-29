@@ -104,6 +104,7 @@ jQuery(document).ready(function($) {
     // Confirmar reserva (resto del código igual)
     $(document).on('click', '#confirm-booking', function() {
         var schedule = $('input[name="booking_schedule"]:checked').val();
+        var schedule_label = $('input[name="booking_schedule"]:checked').closest('label').find('strong').text().trim();
         var tickets = {};
         var hasTickets = false;
         var productId = $('#current-product-id').val();
@@ -141,6 +142,7 @@ jQuery(document).ready(function($) {
                 nonce: booking_ajax.nonce,
                 product_id: productId,
                 schedule_id: schedule,
+                schedule_label: schedule_label,
                 tickets: tickets
             },
             success: function(response) {
